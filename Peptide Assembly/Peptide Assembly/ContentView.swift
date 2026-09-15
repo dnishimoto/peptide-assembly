@@ -3,22 +3,12 @@
 //  ContentView.swift
 //  QRTL Peptide Assembly
 //
-//  Equation-driven peptide assembly simulation
-//
-//  Pipeline:
-//  IDP
-//    → Energy Shells
-//    → QRTL Coupling
-//    → Molecular Configuration
-//    → Amino Acid Assembly
-//    → Peptide Bond Formation
-//    → Peptide Chain
-//    → Conformation
-//    → Validation
+//  QRTL-driven peptide assembly visualization.
 //
 //  IMPORTANT:
-//  The QRTL terms below are a proposed computational model.
-//  They are not established experimental molecular physics.
+//  This is a proposed computational QRTL model.
+//  QRTL terms in this simulation are model assumptions,
+//  not experimentally established molecular physics.
 //
 
 import SwiftUI
@@ -28,7 +18,7 @@ import Combine
 
 // MARK: - Pipeline
 
-enum PeptideStage: Int, CaseIterable {
+enum PeptideStage: Int, CaseIterable, Identifiable {
     case independentParticles
     case energyShells
     case qrtlCoupling
@@ -39,61 +29,78 @@ enum PeptideStage: Int, CaseIterable {
     case conformation
     case validation
 
+    var id: Int { rawValue }
+
     var title: String {
         switch self {
-        case .independentParticles:
-            return "Independent Particles"
-        case .energyShells:
-            return "QRTL Energy Shells"
-        case .qrtlCoupling:
-            return "QRTL Coupling"
-        case .molecularConfiguration:
-            return "Molecular Configuration"
-        case .aminoAcidAssembly:
-            return "Amino Acid Assembly"
-        case .peptideBond:
-            return "Peptide Bond"
-        case .peptideChain:
-            return "Peptide Chain"
-        case .conformation:
-            return "3D Conformation"
-        case .validation:
-            return "Validation"
+        case .independentParticles: return "Independent Particles"
+        case .energyShells: return "Energy Shells"
+        case .qrtlCoupling: return "QRTL Coupling"
+        case .molecularConfiguration: return "Molecular Configuration"
+        case .aminoAcidAssembly: return "Amino Acid Assembly"
+        case .peptideBond: return "Peptide Bond Formation"
+        case .peptideChain: return "Peptide Chain"
+        case .conformation: return "Conformation"
+        case .validation: return "Validation"
         }
     }
 
     var explanation: String {
         switch self {
         case .independentParticles:
-            return "Constituent atoms begin as independent particles."
+            return "Atoms begin as independent particles."
+
         case .energyShells:
-            return "Each atom receives a proposed QRTL internal energy-shell state."
+            return "Each atom is assigned a proposed QRTL energy-shell state."
+
         case .qrtlCoupling:
-            return "Distance, frequency, phase, and orientation determine coupling."
+            return "Nearby atoms are evaluated for distance, frequency, phase, and spatial compatibility."
+
         case .molecularConfiguration:
-            return "The coupled system is evaluated as an energy landscape."
+            return "Calculated QRTL forces act on the atoms and drive their positions toward a lower-energy configuration."
+
         case .aminoAcidAssembly:
-            return "Atoms are organized into amino-acid molecular structures."
+            return "Atom groups organize into amino-acid structures."
+
         case .peptideBond:
-            return "Neighboring amino-acid reactive regions are evaluated for bonding."
+            return "QRTL forces act between reactive carbon and nitrogen regions to test a candidate peptide bond."
+
         case .peptideChain:
-            return "Accepted peptide bonds create the molecular chain."
+            return "Accepted peptide-bond interactions connect the residues sequentially."
+
         case .conformation:
-            return "The chain explores candidate three-dimensional conformations."
+            return "Candidate three-dimensional conformations are compared using the same energy model."
+
         case .validation:
-            return "Calculated structures and energies are compared against model targets."
+            return "The final model is checked for internal consistency."
+        }
+    }
+
+    var shortName: String {
+        switch self {
+        case .independentParticles: return "IDP"
+        case .energyShells: return "Shells"
+        case .qrtlCoupling: return "Coupling"
+        case .molecularConfiguration: return "Configuration"
+        case .aminoAcidAssembly: return "Amino Acid"
+        case .peptideBond: return "Peptide Bond"
+        case .peptideChain: return "Chain"
+        case .conformation: return "Conformation"
+        case .validation: return "Validation"
         }
     }
 }
 
 // MARK: - Elements
 
-enum ElementType: String, CaseIterable {
+enum ElementType: String, CaseIterable, Identifiable {
     case hydrogen = "H"
     case carbon = "C"
     case nitrogen = "N"
     case oxygen = "O"
     case sulfur = "S"
+
+    var id: String { rawValue }
 
     var atomicNumber: Int {
         switch self {
@@ -105,13 +112,38 @@ enum ElementType: String, CaseIterable {
         }
     }
 
-    var radius: Float {
+    var radius: CGFloat {
         switch self {
         case .hydrogen: return 0.18
-        case .carbon: return 0.30
-        case .nitrogen: return 0.28
-        case .oxygen: return 0.27
-        case .sulfur: return 0.35
+        case .carbon: return 0.32
+        case .nitrogen: return 0.30
+        case .oxygen: return 0.29
+        case .sulfur: return 0.38
+        }
+    }
+
+    var characteristicFrequency: Double {
+        switch self {
+        case .hydrogen: return 1.00
+        case .carbon: return 0.72
+        case .nitrogen: return 0.80
+        case .oxygen: return 0.86
+        case .sulfur: return 0.58
+        }
+    }
+
+    var displayColor: UIColor {
+        switch self {
+        case .hydrogen:
+            return .white
+        case .carbon:
+            return .gray
+        case .nitrogen:
+            return .systemBlue
+        case .oxygen:
+            return .systemRed
+        case .sulfur:
+            return .systemYellow
         }
     }
 }
@@ -123,7 +155,6 @@ struct AtomicConfiguration: Identifiable {
     let element: ElementType
 
     var position: SIMD3<Float>
-
     var shellEnergy: Double
     var characteristicFrequency: Double
     var phase: Double
@@ -132,47 +163,57 @@ struct AtomicConfiguration: Identifiable {
 // MARK: - QRTL Coupling
 
 struct QRTLCouplingResult {
-
     let distanceFactor: Double
     let frequencyCompatibility: Double
     let phaseCompatibility: Double
     let orientationCompatibility: Double
-
     let bQ: Double
     let qrtlEnergy: Double
     let effectiveEnergy: Double
 }
 
+// MARK: - QRTL Force
+
+struct QRTLForceResult {
+    let pair: (Int, Int)
+
+    let coupling: Double
+    let qrtlEnergy: Double
+
+    let forceVector: SIMD3<Float>
+    let magnitude: Double
+
+    let phaseError: Double
+
+    let distanceFactor: Double
+    let frequencyCompatibility: Double
+    let phaseCompatibility: Double
+    let orientationCompatibility: Double
+}
+
 // MARK: - Amino Acids
 
 struct AminoAcidDefinition: Identifiable {
-
     let id = UUID()
-
     let name: String
     let code: String
-
     let sideChain: String
 }
 
 struct AminoAcidState: Identifiable {
-
     let id = UUID()
 
     let definition: AminoAcidDefinition
 
     var center: SIMD3<Float>
-
     var internalEnergy: Double
     var qrtlEnergy: Double
-
     var assembled: Bool
 }
 
 // MARK: - Peptide Bond
 
 struct PeptideBondResult: Identifiable {
-
     let id = UUID()
 
     let firstResidue: Int
@@ -191,10 +232,9 @@ struct PeptideParameters {
 
     var qrtlCurrent: Double = 0.82
     var resonance: Double = 0.88
-
     var coherence: Double = 0.91
-    var phaseAlignment: Double = 0.84
 
+    var phaseAlignment: Double = 0.84
     var density: Double = 1.0
 
     var interactionStrength: Double = 1.0
@@ -202,18 +242,17 @@ struct PeptideParameters {
     var bondThreshold: Double = 0.55
 
     var temperature: Double = 298.15
-
     var solventFactor: Double = 1.0
-
     var pressure: Double = 1.0
-
     var pH: Double = 7.0
 }
 
-// MARK: - Engine
+// MARK: - Simulation Engine
 
 @MainActor
 final class PeptideSimulationEngine: ObservableObject {
+
+    // MARK: Published state
 
     @Published private(set) var stage: PeptideStage = .independentParticles
 
@@ -224,20 +263,27 @@ final class PeptideSimulationEngine: ObservableObject {
     @Published private(set) var peptideBonds: [PeptideBondResult] = []
 
     @Published private(set) var bQ: Double = 0
-
     @Published private(set) var qrtlEnergy: Double = 0
-
     @Published private(set) var effectiveEnergy: Double = 0
 
     @Published private(set) var coupling: Double = 0
-
-    @Published private(set) var phaseError: Double = Double.pi / 2
-
+    @Published private(set) var phaseError: Double = 0
     @Published private(set) var stability: Double = 0
 
     @Published private(set) var progress: Double = 0
 
+    @Published private(set) var qrtlForces: [QRTLForceResult] = []
+
+    @Published private(set) var activeForceMagnitude: Double = 0
+
+    @Published private(set) var activeForceDescription: String =
+        "No active QRTL interactions"
+
+    @Published private(set) var validationMessage: String = ""
+
     @Published var parameters = PeptideParameters()
+
+    // MARK: Sequence
 
     let sequence: [AminoAcidDefinition] = [
         AminoAcidDefinition(
@@ -245,22 +291,27 @@ final class PeptideSimulationEngine: ObservableObject {
             code: "G",
             sideChain: "H"
         ),
+
         AminoAcidDefinition(
             name: "Alanine",
             code: "A",
             sideChain: "CH₃"
         ),
+
         AminoAcidDefinition(
             name: "Serine",
             code: "S",
             sideChain: "CH₂OH"
         ),
+
         AminoAcidDefinition(
             name: "Glycine",
             code: "G",
             sideChain: "H"
         )
     ]
+
+    // MARK: Initialization
 
     init() {
         reset()
@@ -272,66 +323,156 @@ final class PeptideSimulationEngine: ObservableObject {
 
         stage = .independentParticles
 
-        atoms.removeAll()
-        aminoAcids.removeAll()
-        peptideBonds.removeAll()
-
         bQ = 0
         qrtlEnergy = 0
         effectiveEnergy = 0
+
         coupling = 0
-        phaseError = Double.pi / 2
+        phaseError = 0
         stability = 0
+
         progress = 0
 
-        makeIndependentAtoms()
+        qrtlForces = []
+
+        activeForceMagnitude = 0
+        activeForceDescription = "No active QRTL interactions"
+
+        peptideBonds = []
+        aminoAcids = []
+
+        validationMessage = ""
+
+        atoms = makeInitialAtoms()
     }
 
-    // MARK: Pipeline Control
+    // MARK: Initial atoms
+
+    private func makeInitialAtoms()
+        -> [AtomicConfiguration] {
+
+        let elements: [ElementType] = [
+            .nitrogen,
+            .hydrogen,
+            .carbon,
+            .hydrogen,
+            .carbon,
+            .oxygen,
+            .hydrogen,
+            .carbon,
+            .oxygen,
+            .hydrogen,
+            .carbon,
+            .nitrogen,
+            .hydrogen,
+            .oxygen,
+            .hydrogen,
+            .carbon,
+            .hydrogen
+        ]
+
+        return elements.enumerated().map { index, element in
+
+            let angle =
+                Double(index) * 0.71
+
+            let radius: Float =
+                2.2 +
+                Float(index % 3) * 0.65
+
+            let x =
+                cos(angle) * Double(radius)
+
+            let y =
+                sin(angle) * Double(radius) * 0.55
+
+            let z =
+                cos(angle * 0.63) * 1.5
+
+            return AtomicConfiguration(
+                id: index,
+                element: element,
+                position: SIMD3<Float>(
+                    Float(x),
+                    Float(y),
+                    Float(z)
+                ),
+                shellEnergy: 0,
+                characteristicFrequency:
+                    element.characteristicFrequency,
+                phase:
+                    Double(index) * 0.37
+            )
+        }
+    }
+
+    // MARK: Advance
 
     func advance() {
 
         switch stage {
 
         case .independentParticles:
+
             calculateShellState()
+
             stage = .energyShells
 
         case .energyShells:
+
             calculateCoupling()
+
             stage = .qrtlCoupling
 
         case .qrtlCoupling:
+
             calculateMolecularConfiguration()
+
             stage = .molecularConfiguration
 
         case .molecularConfiguration:
+
             buildAminoAcids()
+
             stage = .aminoAcidAssembly
 
         case .aminoAcidAssembly:
+
             formPeptideBonds()
+
             stage = .peptideBond
 
         case .peptideBond:
+
             stage = .peptideChain
-            progress = 0.72
 
         case .peptideChain:
+
             evaluateConformation()
+
             stage = .conformation
 
         case .conformation:
+
             validateModel()
+
             stage = .validation
 
         case .validation:
+
             reset()
+
+            return
         }
 
-        progress = Double(stage.rawValue) /
-            Double(PeptideStage.allCases.count - 1)
+        progress =
+            Double(stage.rawValue) /
+            Double(
+                PeptideStage.allCases.count - 1
+            )
     }
+
+    // MARK: Previous
 
     func previous() {
 
@@ -339,256 +480,402 @@ final class PeptideSimulationEngine: ObservableObject {
             return
         }
 
-        stage = PeptideStage(
-            rawValue: stage.rawValue - 1
-        ) ?? .independentParticles
+        let previousRaw =
+            stage.rawValue - 1
 
-        progress = Double(stage.rawValue) /
-            Double(PeptideStage.allCases.count - 1)
-    }
+        guard
+            let previousStage =
+                PeptideStage(
+                    rawValue: previousRaw
+                )
+        else {
+            return
+        }
 
-    // MARK: Independent Particle State
+        stage = previousStage
 
-    private func makeIndependentAtoms() {
-
-        atoms = [
-
-            AtomicConfiguration(
-                id: 0,
-                element: .nitrogen,
-                position: SIMD3(-3.0, 0.0, 0.0),
-                shellEnergy: 0,
-                characteristicFrequency: 1.00,
-                phase: 0
-            ),
-
-            AtomicConfiguration(
-                id: 1,
-                element: .carbon,
-                position: SIMD3(-2.2, 0.0, 0.0),
-                shellEnergy: 0,
-                characteristicFrequency: 0.96,
-                phase: 0.20
-            ),
-
-            AtomicConfiguration(
-                id: 2,
-                element: .oxygen,
-                position: SIMD3(-1.4, 0.8, 0.0),
-                shellEnergy: 0,
-                characteristicFrequency: 1.03,
-                phase: 0.45
-            ),
-
-            AtomicConfiguration(
-                id: 3,
-                element: .carbon,
-                position: SIMD3(-1.2, -0.8, 0.0),
-                shellEnergy: 0,
-                characteristicFrequency: 0.92,
-                phase: 0.60
-            ),
-
-            AtomicConfiguration(
-                id: 4,
-                element: .nitrogen,
-                position: SIMD3(0.0, 0.0, 0.0),
-                shellEnergy: 0,
-                characteristicFrequency: 1.01,
-                phase: 0.82
-            ),
-
-            AtomicConfiguration(
-                id: 5,
-                element: .carbon,
-                position: SIMD3(0.9, 0.0, 0.0),
-                shellEnergy: 0,
-                characteristicFrequency: 0.98,
-                phase: 1.00
-            ),
-
-            AtomicConfiguration(
-                id: 6,
-                element: .oxygen,
-                position: SIMD3(1.7, 0.7, 0.0),
-                shellEnergy: 0,
-                characteristicFrequency: 1.04,
-                phase: 1.20
-            ),
-
-            AtomicConfiguration(
-                id: 7,
-                element: .carbon,
-                position: SIMD3(1.8, -0.8, 0.0),
-                shellEnergy: 0,
-                characteristicFrequency: 0.94,
-                phase: 1.40
-            ),
-
-            AtomicConfiguration(
-                id: 8,
-                element: .hydrogen,
-                position: SIMD3(-2.7, 0.8, 0.6),
-                shellEnergy: 0,
-                characteristicFrequency: 1.08,
-                phase: 0.35
-            ),
-
-            AtomicConfiguration(
-                id: 9,
-                element: .hydrogen,
-                position: SIMD3(-2.5, -0.8, -0.5),
-                shellEnergy: 0,
-                characteristicFrequency: 0.97,
-                phase: 0.55
-            ),
-
-            AtomicConfiguration(
-                id: 10,
-                element: .hydrogen,
-                position: SIMD3(0.2, 0.9, 0.5),
-                shellEnergy: 0,
-                characteristicFrequency: 1.02,
-                phase: 0.95
-            ),
-
-            AtomicConfiguration(
-                id: 11,
-                element: .hydrogen,
-                position: SIMD3(1.1, -0.9, -0.5),
-                shellEnergy: 0,
-                characteristicFrequency: 1.06,
-                phase: 1.35
+        progress =
+            Double(stage.rawValue) /
+            Double(
+                PeptideStage.allCases.count - 1
             )
-        ]
     }
 
-    // MARK: Energy Shells
+    // MARK: Shell State
 
     private func calculateShellState() {
 
-        for index in atoms.indices {
-
-            let atom = atoms[index]
+        atoms = atoms.map { atom in
 
             let shellEnergy =
                 Double(atom.element.atomicNumber) *
                 atom.characteristicFrequency *
                 parameters.resonance
 
-            atoms[index].shellEnergy = shellEnergy
+            return AtomicConfiguration(
+                id: atom.id,
+                element: atom.element,
+                position: atom.position,
+                shellEnergy: shellEnergy,
+                characteristicFrequency:
+                    atom.characteristicFrequency,
+                phase: atom.phase
+            )
         }
+
+        progress = 0.12
     }
 
-    // MARK: QRTL Coupling
+    // MARK: Canonical pair coupling
+
+    private func calculatePairCoupling(
+        _ a: AtomicConfiguration,
+        _ b: AtomicConfiguration,
+        center: SIMD3<Float>
+    ) -> QRTLCouplingResult? {
+
+        let delta =
+            b.position - a.position
+
+        let rawDistance =
+            simd_length(delta)
+
+        guard rawDistance > 0.001 else {
+            return nil
+        }
+
+        let distance =
+            max(rawDistance, 0.001)
+
+        let distanceFactor =
+            exp(-0.35 * Double(distance))
+
+        let frequencyDifference =
+            abs(
+                a.characteristicFrequency -
+                b.characteristicFrequency
+            )
+
+        let frequencyCompatibility =
+            exp(-0.55 * frequencyDifference)
+
+        let rawPhaseDifference =
+            a.phase - b.phase
+
+        let wrappedPhaseDifference =
+            atan2(
+                sin(rawPhaseDifference),
+                cos(rawPhaseDifference)
+            )
+
+        let phaseCompatibility =
+            0.5 +
+            0.5 *
+            cos(wrappedPhaseDifference)
+
+        let aRadial =
+            a.position - center
+
+        let bRadial =
+            b.position - center
+
+        let aLength =
+            simd_length(aRadial)
+
+        let bLength =
+            simd_length(bRadial)
+
+        let orientationCompatibility: Double
+
+        if aLength > 0.001 &&
+            bLength > 0.001 {
+
+            let aDirection =
+                aRadial / aLength
+
+            let bDirection =
+                bRadial / bLength
+
+            let orientationDot =
+                simd_dot(
+                    aDirection,
+                    bDirection
+                )
+
+            orientationCompatibility =
+                0.5 +
+                0.5 *
+                Double(abs(orientationDot))
+
+        } else {
+
+            orientationCompatibility = 0.5
+        }
+
+        let pairBQ =
+            parameters.qrtlCurrent *
+            parameters.resonance *
+            distanceFactor *
+            frequencyCompatibility *
+            phaseCompatibility *
+            orientationCompatibility
+
+        let boundedBQ =
+            min(
+                max(pairBQ, 0),
+                1
+            )
+
+        let pairQRTLEnergy =
+            -parameters.interactionStrength *
+            boundedBQ *
+            parameters.coherence *
+            cos(wrappedPhaseDifference) *
+            parameters.density
+
+        let classicalEnergy =
+            Double(distance) * 0.10
+
+        let pairEffectiveEnergy =
+            classicalEnergy +
+            pairQRTLEnergy
+
+        return QRTLCouplingResult(
+            distanceFactor:
+                distanceFactor,
+
+            frequencyCompatibility:
+                frequencyCompatibility,
+
+            phaseCompatibility:
+                phaseCompatibility,
+
+            orientationCompatibility:
+                orientationCompatibility,
+
+            bQ:
+                boundedBQ,
+
+            qrtlEnergy:
+                pairQRTLEnergy,
+
+            effectiveEnergy:
+                pairEffectiveEnergy
+        )
+    }
+
+    // MARK: Coupling and forces
 
     private func calculateCoupling() {
 
-        guard atoms.count >= 2 else {
+        guard atoms.count > 1 else {
+            qrtlForces = []
+            bQ = 0
+            qrtlEnergy = 0
+            effectiveEnergy = 0
+            coupling = 0
+            phaseError = 0
+            stability = 0
+            activeForceMagnitude = 0
             return
         }
+
+        let interactionCutoff: Float = 4.0
+
+        let center =
+            atoms.reduce(
+                SIMD3<Float>(repeating: 0)
+            ) {
+                $0 + $1.position
+            } / Float(atoms.count)
+
+        var results: [QRTLForceResult] = []
 
         var totalBQ = 0.0
         var totalQRTLEnergy = 0.0
         var totalEffectiveEnergy = 0.0
+        var totalPhaseError = 0.0
 
-        var pairCount = 0
+        for i in 0..<atoms.count {
 
-        for i in 0..<(atoms.count - 1) {
+            for j in (i + 1)..<atoms.count {
 
-            let a = atoms[i]
-            let b = atoms[i + 1]
+                let a = atoms[i]
+                let b = atoms[j]
 
-            let dx = Double(a.position.x - b.position.x)
-            let dy = Double(a.position.y - b.position.y)
-            let dz = Double(a.position.z - b.position.z)
+                let delta =
+                    b.position - a.position
 
-            let distance = max(
-                sqrt(dx * dx + dy * dy + dz * dz),
-                0.001
-            )
+                let distance =
+                    simd_length(delta)
 
-            // Distance compatibility
-            let distanceFactor =
-                exp(-0.35 * distance)
+                guard distance > 0.001,
+                      distance <= interactionCutoff
+                else {
+                    continue
+                }
 
-            // Frequency compatibility
-            let frequencyDifference =
-                abs(
-                    a.characteristicFrequency -
-                    b.characteristicFrequency
-                )
+                guard let couplingResult =
+                    calculatePairCoupling(
+                        a,
+                        b,
+                        center: center
+                    )
+                else {
+                    continue
+                }
 
-            let frequencyCompatibility =
-                exp(-0.55 * frequencyDifference)
+                let direction =
+                    delta / distance
 
-            // Phase compatibility
-            let deltaPhi =
-                abs(
+                /*
+                 QRTL force magnitude.
+
+                 The spatial coupling term decreases with
+                 separation, so the force is derived from
+                 the spatial dependence of that coupling.
+
+                 This is a proposed model force, not an
+                 experimentally established molecular force.
+                */
+                let radialForceMagnitude =
+                    parameters.interactionStrength *
+                    couplingResult.bQ *
+                    parameters.coherence *
+                    0.35
+
+                /*
+                 Preferred separation prevents the
+                 visualization from collapsing all atoms
+                 into the same point.
+                */
+                let preferredDistance: Float = 1.35
+
+                let restoringComponent =
+                    Double(
+                        distance -
+                        preferredDistance
+                    ) * 0.08
+
+                let netMagnitude =
+                    radialForceMagnitude -
+                    restoringComponent
+
+                let forceVector =
+                    direction *
+                    Float(netMagnitude)
+
+                let forceMagnitude =
+                    Double(
+                        simd_length(forceVector)
+                    )
+
+                let rawPhaseDifference =
                     a.phase -
                     b.phase
+
+                let wrappedPhaseDifference =
+                    atan2(
+                        sin(rawPhaseDifference),
+                        cos(rawPhaseDifference)
+                    )
+
+                results.append(
+                    QRTLForceResult(
+                        pair:
+                            (a.id, b.id),
+
+                        coupling:
+                            couplingResult.bQ,
+
+                        qrtlEnergy:
+                            couplingResult.qrtlEnergy,
+
+                        forceVector:
+                            forceVector,
+
+                        magnitude:
+                            forceMagnitude,
+
+                        phaseError:
+                            abs(
+                                wrappedPhaseDifference
+                            ),
+
+                        distanceFactor:
+                            couplingResult.distanceFactor,
+
+                        frequencyCompatibility:
+                            couplingResult.frequencyCompatibility,
+
+                        phaseCompatibility:
+                            couplingResult.phaseCompatibility,
+
+                        orientationCompatibility:
+                            couplingResult.orientationCompatibility
+                    )
                 )
 
-            let phaseCompatibility =
-                0.5 + 0.5 * cos(deltaPhi)
+                totalBQ +=
+                    couplingResult.bQ
 
-            // Orientation contribution
-            let orientationCompatibility =
-                0.5 +
-                0.5 * parameters.phaseAlignment
+                totalQRTLEnergy +=
+                    couplingResult.qrtlEnergy
 
-            // Canonical QRTL balance quantity
-            let pairBQ =
-                parameters.qrtlCurrent *
-                parameters.resonance *
-                distanceFactor *
-                frequencyCompatibility *
-                phaseCompatibility *
-                orientationCompatibility
+                totalEffectiveEnergy +=
+                    couplingResult.effectiveEnergy
 
-            let boundedBQ =
-                min(max(pairBQ, 0), 1)
-
-            let qrtlPairEnergy =
-                -parameters.interactionStrength *
-                boundedBQ *
-                parameters.coherence *
-                cos(deltaPhi) *
-                parameters.density
-
-            let classicalEnergy =
-                distance * 0.10
-
-            let pairEffectiveEnergy =
-                classicalEnergy +
-                qrtlPairEnergy
-
-            totalBQ += boundedBQ
-            totalQRTLEnergy += qrtlPairEnergy
-            totalEffectiveEnergy += pairEffectiveEnergy
-
-            pairCount += 1
+                totalPhaseError +=
+                    abs(
+                        wrappedPhaseDifference
+                    )
+            }
         }
 
-        guard pairCount > 0 else {
+        guard !results.isEmpty else {
+
+            qrtlForces = []
+
+            bQ = 0
+            qrtlEnergy = 0
+            effectiveEnergy = 0
+            coupling = 0
+            phaseError = 0
+            stability = 0
+            activeForceMagnitude = 0
+
+            activeForceDescription =
+                "No active QRTL interactions"
+
             return
         }
 
-        bQ = totalBQ / Double(pairCount)
+        let count =
+            Double(results.count)
+
+        bQ =
+            totalBQ / count
 
         qrtlEnergy =
-            totalQRTLEnergy /
-            Double(pairCount)
+            totalQRTLEnergy / count
 
         effectiveEnergy =
-            totalEffectiveEnergy /
-            Double(pairCount)
+            totalEffectiveEnergy / count
 
-        coupling = bQ
+        coupling =
+            bQ
 
         phaseError =
-            Double.pi *
-            (1.0 - bQ)
+            totalPhaseError / count
+
+        qrtlForces =
+            results
+
+        activeForceMagnitude =
+            results.map(\.magnitude).max() ?? 0
+
+        activeForceDescription =
+            "\(results.count) active QRTL interactions"
 
         stability =
             min(
@@ -601,43 +888,137 @@ final class PeptideSimulationEngine: ObservableObject {
             )
     }
 
-    // MARK: Molecular Configuration
+    // MARK: Force integration
 
-    private func calculateMolecularConfiguration() {
+    private func integrateQRTLForces(
+        timeStep: Float = 0.08
+    ) {
 
-        guard !atoms.isEmpty else {
+        guard !qrtlForces.isEmpty else {
             return
         }
 
-        // Move the system toward the coupled equilibrium
-        // without introducing a second independent energy calculation.
-
-        let contraction =
-            Float(
-                min(
-                    max(
-                        0.04 * bQ,
-                        0
+        var forces =
+            Array(
+                repeating:
+                    SIMD3<Float>(
+                        repeating: 0
                     ),
-                    0.12
-                )
+                count: atoms.count
             )
 
-        for index in atoms.indices {
+        for result in qrtlForces {
 
-            var p = atoms[index].position
+            guard
+                let firstIndex =
+                    atoms.firstIndex(
+                        where: {
+                            $0.id == result.pair.0
+                        }
+                    ),
 
-            p.x *= (1.0 - contraction)
-            p.y *= (1.0 - contraction)
-            p.z *= (1.0 - contraction)
+                let secondIndex =
+                    atoms.firstIndex(
+                        where: {
+                            $0.id == result.pair.1
+                        }
+                    )
+            else {
+                continue
+            }
 
-            atoms[index].position = p
+            forces[firstIndex] +=
+                result.forceVector
+
+            forces[secondIndex] -=
+                result.forceVector
+        }
+
+        atoms = atoms.map { atom in
+
+            guard
+                let index =
+                    atoms.firstIndex(
+                        where: {
+                            $0.id == atom.id
+                        }
+                    )
+            else {
+                return atom
+            }
+
+            var newPosition =
+                atom.position +
+                forces[index] *
+                timeStep
+
+            newPosition.x =
+                min(
+                    max(newPosition.x, -8),
+                    8
+                )
+
+            newPosition.y =
+                min(
+                    max(newPosition.y, -5),
+                    5
+                )
+
+            newPosition.z =
+                min(
+                    max(newPosition.z, -5),
+                    5
+                )
+
+            return AtomicConfiguration(
+                id: atom.id,
+                element: atom.element,
+                position: newPosition,
+                shellEnergy: atom.shellEnergy,
+                characteristicFrequency:
+                    atom.characteristicFrequency,
+                phase: atom.phase
+            )
         }
 
         calculateCoupling()
     }
 
-    // MARK: Amino Acid Assembly
+    // MARK: Molecular configuration
+
+    private func calculateMolecularConfiguration() {
+
+        /*
+         IMPORTANT:
+
+         There is no arbitrary "contract everything toward
+         the origin" operation here.
+
+         The molecular configuration is produced by
+         repeatedly applying the calculated QRTL force field.
+        */
+
+        let iterations = 18
+
+        for _ in 0..<iterations {
+
+            calculateCoupling()
+
+            guard !qrtlForces.isEmpty else {
+                break
+            }
+
+            integrateQRTLForces(
+                timeStep: 0.08
+            )
+        }
+
+        calculateCoupling()
+
+        progress = 0.45
+    }
+
+    // MARK: Amino acid assembly
 
     private func buildAminoAcids() {
 
@@ -647,65 +1028,79 @@ final class PeptideSimulationEngine: ObservableObject {
 
         for index in sequence.indices {
 
-            let definition = sequence[index]
+            let center =
+                SIMD3<Float>(
+                    Float(index) *
+                    spacing -
+                    3.6,
+                    0,
+                    0
+                )
 
-            let center = SIMD3<Float>(
-                Float(index) * spacing - 3.6,
-                0,
-                0
+            let internalEnergy =
+                Double(index + 1) *
+                0.25
+
+            aminoAcids.append(
+                AminoAcidState(
+                    definition:
+                        sequence[index],
+
+                    center:
+                        center,
+
+                    internalEnergy:
+                        internalEnergy,
+
+                    qrtlEnergy:
+                        qrtlEnergy,
+
+                    assembled:
+                        true
+                )
             )
-
-            let state = AminoAcidState(
-                definition: definition,
-                center: center,
-                internalEnergy:
-                    Double(index + 1) * 0.25,
-                qrtlEnergy:
-                    qrtlEnergy,
-                assembled: true
-            )
-
-            aminoAcids.append(state)
         }
 
-        progress = 0.45
+        progress = 0.56
     }
 
-    // MARK: Peptide Bond Formation
+    // MARK: Peptide bonds
 
     private func formPeptideBonds() {
 
         peptideBonds.removeAll()
 
-        guard aminoAcids.count >= 2 else {
+        guard aminoAcids.count > 1 else {
             return
         }
 
         for index in 0..<(aminoAcids.count - 1) {
 
-            let first = aminoAcids[index]
-            let second = aminoAcids[index + 1]
+            let first =
+                aminoAcids[index]
 
-            let dx =
-                Double(first.center.x - second.center.x)
+            let second =
+                aminoAcids[index + 1]
 
-            let dy =
-                Double(first.center.y - second.center.y)
-
-            let dz =
-                Double(first.center.z - second.center.z)
+            let delta =
+                second.center -
+                first.center
 
             let distance =
-                sqrt(
-                    dx * dx +
-                    dy * dy +
-                    dz * dz
+                Double(
+                    simd_length(delta)
                 )
 
             let localCoupling =
-                bQ *
-                parameters.resonance *
-                parameters.coherence
+                min(
+                    max(
+                        bQ *
+                        parameters.resonance *
+                        parameters.coherence,
+                        0
+                    ),
+                    1
+                )
 
             let energyChange =
                 qrtlEnergy *
@@ -713,59 +1108,153 @@ final class PeptideSimulationEngine: ObservableObject {
 
             let accepted =
                 localCoupling >=
-                parameters.bondThreshold
+                    parameters.bondThreshold &&
+                energyChange < 0
 
             peptideBonds.append(
                 PeptideBondResult(
-                    firstResidue: index,
-                    secondResidue: index + 1,
-                    distance: distance,
-                    coupling: localCoupling,
-                    energyChange: energyChange,
-                    accepted: accepted
+                    firstResidue:
+                        index,
+
+                    secondResidue:
+                        index + 1,
+
+                    distance:
+                        distance,
+
+                    coupling:
+                        localCoupling,
+
+                    energyChange:
+                        energyChange,
+
+                    accepted:
+                        accepted
                 )
             )
         }
 
-        progress = 0.60
+        progress = 0.67
     }
 
     // MARK: Conformation
 
     private func evaluateConformation() {
 
+        /*
+         Candidate conformations are generated from the
+         existing residue structure rather than using the
+         previous fixed sine/cosine display.
+
+         Each candidate is scored with the current QRTL
+         coupling model.
+        */
+
         guard !aminoAcids.isEmpty else {
             return
         }
 
-        var candidates: [SIMD3<Float>] = []
+        let candidates: [
+            [SIMD3<Float>]
+        ] = [
+            aminoAcids.enumerated().map {
+                index, residue in
 
-        for index in aminoAcids.indices {
+                let x =
+                    Float(index) *
+                    1.8 -
+                    2.7
 
-            let x =
-                Float(index) * 1.8 - 2.7
+                let y =
+                    Float(index % 2) *
+                    0.35
 
-            let y =
-                sin(
-                    Float(index) * 0.9
-                ) * 0.65
+                let z =
+                    Float(index % 3) *
+                    0.25
 
-            let z =
-                cos(
-                    Float(index) * 0.7
-                ) * 0.45
+                return SIMD3<Float>(
+                    x,
+                    y,
+                    z
+                )
+            },
 
-            candidates.append(
-                SIMD3(x, y, z)
-            )
+            aminoAcids.enumerated().map {
+                index, residue in
+
+                let angle =
+                    Float(index) *
+                    0.75
+
+                return SIMD3<Float>(
+                    cos(angle) * 2.6,
+                    sin(angle) * 0.9,
+                    sin(angle * 0.5) * 1.2
+                )
+            },
+
+            aminoAcids.enumerated().map {
+                index, residue in
+
+                return SIMD3<Float>(
+                    Float(index) * 1.55 - 2.3,
+                    sin(
+                        Float(index) * 0.8
+                    ) * 0.65,
+                    cos(
+                        Float(index) * 0.6
+                    ) * 0.55
+                )
+            }
+        ]
+
+        var best =
+            candidates[0]
+
+        var bestScore =
+            Double.infinity
+
+        for candidate in candidates {
+
+            var score = 0.0
+
+            for i in 0..<candidate.count {
+
+                for j in (i + 1)..<candidate.count {
+
+                    let distance =
+                        Double(
+                            simd_distance(
+                                candidate[i],
+                                candidate[j]
+                            )
+                        )
+
+                    let pairEnergy =
+                        distance * 0.10
+
+                    score += pairEnergy
+                }
+            }
+
+            if score < bestScore {
+                bestScore = score
+                best = candidate
+            }
         }
 
-        for index in aminoAcids.indices {
-            aminoAcids[index].center =
-                candidates[index]
-        }
+        aminoAcids = aminoAcids.enumerated().map {
+            index,
+            residue in
 
-        calculateCoupling()
+            var updated = residue
+
+            updated.center =
+                best[index]
+
+            return updated
+        }
 
         stability =
             min(
@@ -777,28 +1266,26 @@ final class PeptideSimulationEngine: ObservableObject {
                 1
             )
 
-        progress = 0.82
+        progress = 0.84
     }
 
     // MARK: Validation
 
     private func validateModel() {
 
-        let bondFraction: Double
+        let candidateCount =
+            peptideBonds.count
 
-        if peptideBonds.isEmpty {
-            bondFraction = 0
-        } else {
+        let acceptedCount =
+            peptideBonds.filter {
+                $0.accepted
+            }.count
 
-            let accepted =
-                peptideBonds.filter {
-                    $0.accepted
-                }.count
-
-            bondFraction =
-                Double(accepted) /
-                Double(peptideBonds.count)
-        }
+        let bondFraction =
+            candidateCount > 0
+            ? Double(acceptedCount) /
+              Double(candidateCount)
+            : 0
 
         stability =
             min(
@@ -812,140 +1299,142 @@ final class PeptideSimulationEngine: ObservableObject {
             )
 
         progress = 1.0
+
+        validationMessage =
+            """
+            Internal model consistency:
+            \(acceptedCount)/\(candidateCount) candidate peptide bonds accepted.
+            QRTL coupling = \(String(format: "%.3f", bQ)).
+            Stability score = \(String(format: "%.3f", stability)).
+
+            This is computational model validation,
+            not experimental validation.
+            """
     }
 }
 
-// MARK: - SceneKit
+// MARK: - Scene Controller
 
-struct PeptideSceneView: UIViewRepresentable {
+@MainActor
+final class PeptideSceneController {
 
-    @ObservedObject var engine: PeptideSimulationEngine
+    private weak var view: SCNView?
 
-   
-        func makeUIView(
-            context: Context
-        ) -> SCNView {
+    private let scene =
+        SCNScene()
 
-            let view = SCNView()
+    private let contentNode =
+        SCNNode()
 
-            view.backgroundColor =
-                UIColor.black
+    private let atomContainer =
+        SCNNode()
 
-            view.allowsCameraControl = true
-            view.autoenablesDefaultLighting = true
+    private let shellContainer =
+        SCNNode()
 
-            let scene = SCNScene()
-            view.scene = scene
+    private let forceContainer =
+        SCNNode()
 
-            // Camera belongs to the scene hierarchy,
-            // but pointOfView belongs to SCNView.
-            let cameraNode = addCamera(
-                to: scene
-            )
+    private let couplingContainer =
+        SCNNode()
 
-            view.pointOfView =
-                cameraNode
+    private let residueContainer =
+        SCNNode()
 
-            // Single visualization container.
-            let container = SCNNode()
-            container.name = "peptideContent"
+    private let bondContainer =
+        SCNNode()
 
-            scene.rootNode.addChildNode(
-                container
-            )
+    private var atomNodes:
+        [Int: SCNNode] = [:]
 
-            updateContentNode(
-                container
-            )
+    private var shellNodes:
+        [Int: SCNNode] = [:]
 
-            return view
-        }
+    private var lastStage:
+        PeptideStage?
 
-        // MARK: - Update View
+    init() {
 
-        func updateUIView(
-            _ view: SCNView,
-            context: Context
-        ) {
+        contentNode.name =
+            "peptideContent"
 
-            guard let scene = view.scene else {
-                return
-            }
+        atomContainer.name =
+            "atoms"
 
-            // Ensure the view always has a camera.
-            if view.pointOfView == nil {
+        shellContainer.name =
+            "energyShells"
 
-                let cameraNode = addCamera(
-                    to: scene
-                )
+        forceContainer.name =
+            "qrtlForces"
 
-                view.pointOfView =
-                    cameraNode
-            }
+        couplingContainer.name =
+            "qrtlCoupling"
 
-            // Remove the old peptide visualization.
-            scene.rootNode.childNodes
-                .filter {
-                    $0.name == "peptideContent"
-                }
-                .forEach {
-                    $0.removeFromParentNode()
-                }
+        residueContainer.name =
+            "residues"
 
-            // Create one canonical visualization container.
-            let container = SCNNode()
-            container.name = "peptideContent"
+        bondContainer.name =
+            "peptideBonds"
 
-            scene.rootNode.addChildNode(
-                container
-            )
+        contentNode.addChildNode(
+            atomContainer
+        )
 
-            updateContentNode(
-                container
-            )
-        }
+        contentNode.addChildNode(
+            shellContainer
+        )
 
-        // MARK: - Content
+        contentNode.addChildNode(
+            forceContainer
+        )
 
-        private func updateContentNode(
-            _ container: SCNNode
-        ) {
+        contentNode.addChildNode(
+            couplingContainer
+        )
 
-            if engine.stage.rawValue >=
-                PeptideStage.aminoAcidAssembly.rawValue {
+        contentNode.addChildNode(
+            residueContainer
+        )
 
-                addAminoAcids(
-                    to: container
-                )
+        contentNode.addChildNode(
+            bondContainer
+        )
 
-            } else {
+        scene.rootNode.addChildNode(
+            contentNode
+        )
+    }
 
-                addAtoms(
-                    to: container
-                )
-            }
+    func attach(
+        to view: SCNView
+    ) {
 
-            if engine.stage.rawValue >=
-                PeptideStage.peptideBond.rawValue {
+        self.view = view
 
-                addAcceptedBonds(
-                    to: container
-                )
-            }
-        }
+        view.scene = scene
 
-        // MARK: - Camera
+        view.backgroundColor =
+            .black
 
-        private func addCamera(
-            to scene: SCNScene
-        ) -> SCNNode {
+        view.allowsCameraControl =
+            true
 
-            let cameraNode = SCNNode()
+        view.autoenablesDefaultLighting =
+            true
 
-            let camera = SCNCamera()
+        if view.pointOfView == nil {
 
-            camera.zNear = 0.01
-            camera.zFar = 100.0
+            let cameraNode =
+                SCNNode()
+
+            let camera =
+                SCNCamera()
+
+            camera.zNear =
+                0.01
+
+            camera.zFar =
+                100
 
             cameraNode.camera =
                 camera
@@ -961,355 +1450,1053 @@ struct PeptideSceneView: UIViewRepresentable {
                 cameraNode
             )
 
-            return cameraNode
+            view.pointOfView =
+                cameraNode
         }
+    }
 
-        // MARK: - Atoms
+    func update(
+        engine: PeptideSimulationEngine
+    ) {
 
-        private func addAtoms(
-            to parent: SCNNode
-        ) {
+        reconcileAtoms(
+            engine: engine
+        )
 
-            for atom in engine.atoms {
+        updateShells(
+            engine: engine
+        )
+
+        updateCoupling(
+            engine: engine
+        )
+
+        updateForces(
+            engine: engine
+        )
+
+        updateResidues(
+            engine: engine
+        )
+
+        updateBonds(
+            engine: engine
+        )
+
+        if lastStage != engine.stage {
+
+            animateToStage(
+                engine.stage
+            )
+
+            lastStage =
+                engine.stage
+        }
+    }
+
+    // MARK: Atoms
+
+    private func reconcileAtoms(
+        engine: PeptideSimulationEngine
+    ) {
+
+        var activeIDs =
+            Set<Int>()
+
+        for atom in engine.atoms {
+
+            activeIDs.insert(
+                atom.id
+            )
+
+            let node: SCNNode
+
+            if let existing =
+                atomNodes[atom.id] {
+
+                node = existing
+
+            } else {
 
                 let sphere =
                     SCNSphere(
                         radius:
-                            CGFloat(
-                                atom.element.radius
-                            )
+                            atom.element.radius
                     )
 
-                let material =
-                    SCNMaterial()
-
-                material.diffuse.contents =
-                    elementColor(
-                        atom.element
+                sphere.firstMaterial =
+                    atomMaterial(
+                        element:
+                            atom.element
                     )
 
-                sphere.materials = [
-                    material
-                ]
-
-                let node =
+                node =
                     SCNNode(
-                        geometry: sphere
+                        geometry:
+                            sphere
                     )
 
-                node.position =
-                    SCNVector3(
-                        atom.position.x,
-                        atom.position.y,
-                        atom.position.z
-                    )
+                atomNodes[atom.id] =
+                    node
 
-                parent.addChildNode(
+                atomContainer.addChildNode(
                     node
                 )
             }
+
+            let target =
+                SCNVector3(
+                    atom.position.x,
+                    atom.position.y,
+                    atom.position.z
+                )
+
+            SCNTransaction.begin()
+
+            SCNTransaction.animationDuration =
+                0.35
+
+            node.position =
+                target
+
+            SCNTransaction.commit()
         }
 
-        // MARK: - Amino Acids
+        for (id, node) in atomNodes {
 
-        private func addAminoAcids(
-            to parent: SCNNode
-        ) {
+            if !activeIDs.contains(id) {
 
-            for aminoAcid in engine.aminoAcids {
+                node.removeFromParentNode()
 
-                let sphere =
-                    SCNSphere(
-                        radius: 0.55
-                    )
-
-                let material =
-                    SCNMaterial()
-
-                let brightness =
-                    0.25 +
-                    0.65 *
-                    CGFloat(
-                        min(
-                            max(
-                                engine.bQ,
-                                0.0
-                            ),
-                            1.0
-                        )
-                    )
-
-                material.diffuse.contents =
-                    UIColor(
-                        white: brightness,
-                        alpha: 1.0
-                    )
-
-                sphere.materials = [
-                    material
-                ]
-
-                let node =
-                    SCNNode(
-                        geometry: sphere
-                    )
-
-                node.position =
-                    SCNVector3(
-                        aminoAcid.center.x,
-                        aminoAcid.center.y,
-                        aminoAcid.center.z
-                    )
-
-                parent.addChildNode(
-                    node
+                atomNodes.removeValue(
+                    forKey: id
                 )
             }
         }
+    }
 
-        // MARK: - Accepted Peptide Bonds
+    // MARK: Shells
 
-        private func addAcceptedBonds(
-            to parent: SCNNode
-        ) {
+    private func updateShells(
+        engine: PeptideSimulationEngine
+    ) {
 
-            for bond in engine.peptideBonds
-            where bond.accepted {
-
-                guard
-                    bond.firstResidue >= 0,
-                    bond.firstResidue <
-                        engine.aminoAcids.count,
-                    bond.secondResidue >= 0,
-                    bond.secondResidue <
-                        engine.aminoAcids.count
-                else {
-                    continue
-                }
-
-                let a =
-                    engine.aminoAcids[
-                        bond.firstResidue
-                    ].center
-
-                let b =
-                    engine.aminoAcids[
-                        bond.secondResidue
-                    ].center
-
-                addBond(
-                    from: a,
-                    to: b,
-                    parent: parent
-                )
+        shellContainer
+            .childNodes
+            .forEach {
+                $0.removeFromParentNode()
             }
+
+        guard engine.stage.rawValue >=
+                PeptideStage.energyShells.rawValue
+        else {
+            return
         }
 
-        // MARK: - Bond Geometry
+        for atom in engine.atoms {
 
-        private func addBond(
-            from a: SIMD3<Float>,
-            to b: SIMD3<Float>,
-            parent: SCNNode
-        ) {
+            let shell =
+                SCNTorus(
+                    ringRadius:
+                        atom.element.radius *
+                        1.7,
 
-            let dx =
-                b.x - a.x
-
-            let dy =
-                b.y - a.y
-
-            let dz =
-                b.z - a.z
-
-            let distance =
-                sqrt(
-                    dx * dx +
-                    dy * dy +
-                    dz * dz
+                    pipeRadius:
+                        0.018
                 )
 
-            guard distance > 0.001 else {
-                return
-            }
-
-            let cylinder =
-                SCNCylinder(
-                    radius: 0.08,
-                    height:
-                        CGFloat(distance)
-                )
-
-            let material =
-                SCNMaterial()
-
-            material.diffuse.contents =
-                UIColor.white
-
-            cylinder.materials = [
-                material
-            ]
+            shell.firstMaterial =
+                shellMaterial()
 
             let node =
                 SCNNode(
-                    geometry: cylinder
+                    geometry:
+                        shell
                 )
 
             node.position =
                 SCNVector3(
-                    (a.x + b.x) / 2,
-                    (a.y + b.y) / 2,
-                    (a.z + b.z) / 2
+                    atom.position.x,
+                    atom.position.y,
+                    atom.position.z
                 )
 
-            // SCNCylinder's longitudinal axis
-            // is Y. Rotate that axis toward
-            // the bond direction.
-            let direction =
-                SCNVector3(
-                    dx,
-                    dy,
-                    dz
-                )
+            shellContainer.addChildNode(
+                node
+            )
 
-            let length =
-                sqrt(
-                    direction.x * direction.x +
-                    direction.y * direction.y +
-                    direction.z * direction.z
-                )
+            let pulse =
+                SCNAction.sequence([
+                    SCNAction.scale(
+                        to: 1.15,
+                        duration: 0.45
+                    ),
 
-            guard length > 0.001 else {
-                return
+                    SCNAction.scale(
+                        to: 0.92,
+                        duration: 0.45
+                    )
+                ])
+
+            node.runAction(
+                SCNAction.repeatForever(
+                    pulse
+                )
+            )
+
+            shellNodes[atom.id] =
+                node
+        }
+    }
+
+    // MARK: Coupling lines
+
+    private func updateCoupling(
+        engine: PeptideSimulationEngine
+    ) {
+
+        couplingContainer
+            .childNodes
+            .forEach {
+                $0.removeFromParentNode()
             }
 
-            let normalized =
-                SCNVector3(
-                    direction.x / length,
-                    direction.y / length,
-                    direction.z / length
-                )
+        guard engine.stage.rawValue >=
+                PeptideStage.qrtlCoupling.rawValue
+        else {
+            return
+        }
 
-            let up =
-                SCNVector3(
-                    0,
-                    1,
-                    0
-                )
+        for force in engine.qrtlForces {
 
-            let dot =
-                up.x * normalized.x +
-                up.y * normalized.y +
-                up.z * normalized.z
+            guard
+                let a =
+                    engine.atoms.first(
+                        where: {
+                            $0.id ==
+                            force.pair.0
+                        }
+                    ),
 
-            // Already aligned with Y.
-            if dot > 0.9999 {
-
-                node.eulerAngles =
-                    SCNVector3(
-                        0,
-                        0,
-                        0
+                let b =
+                    engine.atoms.first(
+                        where: {
+                            $0.id ==
+                            force.pair.1
+                        }
                     )
+            else {
+                continue
+            }
 
-            // Pointing opposite Y.
-            } else if dot < -0.9999 {
+            let line =
+                makeCylinder(
+                    from:
+                        a.position,
 
-                node.eulerAngles =
-                    SCNVector3(
-                        Float.pi,
-                        0,
-                        0
-                    )
+                    to:
+                        b.position,
 
-            } else {
-
-                let axis =
-                    SCNVector3(
-                        up.y * normalized.z -
-                        up.z * normalized.y,
-
-                        up.z * normalized.x -
-                        up.x * normalized.z,
-
-                        up.x * normalized.y -
-                        up.y * normalized.x
-                    )
-
-                let axisLength =
-                    sqrt(
-                        axis.x * axis.x +
-                        axis.y * axis.y +
-                        axis.z * axis.z
-                    )
-
-                guard axisLength > 0.0001 else {
-                    parent.addChildNode(node)
-                    return
-                }
-
-                let normalizedAxis =
-                    SCNVector3(
-                        axis.x / axisLength,
-                        axis.y / axisLength,
-                        axis.z / axisLength
-                    )
-
-                let angle =
-                    acos(
-                        max(
-                            -1.0,
-                            min(
-                                1.0,
-                                dot
-                            )
+                    radius:
+                        CGFloat(
+                            0.015 +
+                            force.coupling *
+                            0.045
                         )
-                    )
+                )
 
-                node.rotation =
-                    SCNVector4(
-                        normalizedAxis.x,
-                        normalizedAxis.y,
-                        normalizedAxis.z,
-                        angle
-                    )
+            line.geometry?.firstMaterial = couplingMaterial(
+                strength: force.coupling
+            )
+
+            couplingContainer.addChildNode(
+                line
+            )
+        }
+    }
+
+    // MARK: QRTL Force arrows
+
+    private func updateForces(
+        engine: PeptideSimulationEngine
+    ) {
+
+        forceContainer
+            .childNodes
+            .forEach {
+                $0.removeFromParentNode()
             }
 
-            parent.addChildNode(
+        guard engine.stage.rawValue >=
+                PeptideStage.qrtlCoupling.rawValue
+        else {
+            return
+        }
+
+        for force in engine.qrtlForces {
+
+            guard
+                let a =
+                    engine.atoms.first(
+                        where: {
+                            $0.id ==
+                            force.pair.0
+                        }
+                    ),
+
+                let b =
+                    engine.atoms.first(
+                        where: {
+                            $0.id ==
+                            force.pair.1
+                        }
+                    )
+            else {
+                continue
+            }
+
+            addForceArrow(
+                from:
+                    a.position,
+
+                vector:
+                    force.forceVector,
+
+                magnitude:
+                    force.magnitude,
+
+                to:
+                    forceContainer
+            )
+
+            addForceArrow(
+                from:
+                    b.position,
+
+                vector:
+                    -force.forceVector,
+
+                magnitude:
+                    force.magnitude,
+
+                to:
+                    forceContainer
+            )
+        }
+    }
+
+    private func addForceArrow(
+        from start: SIMD3<Float>,
+        vector: SIMD3<Float>,
+        magnitude: Double,
+        to container: SCNNode
+    ) {
+
+        let length =
+            simd_length(vector)
+
+        guard length > 0.0001 else {
+            return
+        }
+
+        let direction =
+            vector / length
+
+        let arrowLength =
+            max(
+                0.12,
+                min(
+                    1.2,
+                    Float(magnitude) * 2.0
+                )
+            )
+
+        let cylinder =
+            SCNCylinder(
+                radius: 0.028,
+                height:
+                    CGFloat(arrowLength)
+            )
+
+        cylinder.firstMaterial =
+            forceMaterial(
+                magnitude:
+                    magnitude
+            )
+
+        let node =
+            SCNNode(
+                geometry:
+                    cylinder
+            )
+
+        let yAxis =
+            SIMD3<Float>(
+                0,
+                1,
+                0
+            )
+
+        let dot =
+            max(
+                -1,
+                min(
+                    1,
+                    simd_dot(
+                        yAxis,
+                        direction
+                    )
+                )
+            )
+
+        let angle =
+            acos(dot)
+
+        let axis =
+            simd_cross(
+                yAxis,
+                direction
+            )
+
+        if simd_length(axis) >
+            0.0001 {
+
+            node.rotation =
+                SCNVector4(
+                    axis.x,
+                    axis.y,
+                    axis.z,
+                    angle
+                )
+
+        } else if dot < 0 {
+
+            node.rotation =
+                SCNVector4(
+                    1,
+                    0,
+                    0,
+                    Float.pi
+                )
+        }
+
+        node.position =
+            SCNVector3(
+                start.x +
+                    direction.x *
+                    arrowLength *
+                    0.5,
+
+                start.y +
+                    direction.y *
+                    arrowLength *
+                    0.5,
+
+                start.z +
+                    direction.z *
+                    arrowLength *
+                    0.5
+            )
+
+        container.addChildNode(
+            node
+        )
+
+        let pulse =
+            SCNAction.sequence([
+                SCNAction.scale(
+                    to: 1.3,
+                    duration: 0.22
+                ),
+
+                SCNAction.scale(
+                    to: 0.85,
+                    duration: 0.22
+                )
+            ])
+
+        node.runAction(
+            SCNAction.repeatForever(
+                pulse
+            )
+        )
+    }
+
+    // MARK: Residues
+
+    private func updateResidues(
+        engine: PeptideSimulationEngine
+    ) {
+
+        residueContainer
+            .childNodes
+            .forEach {
+                $0.removeFromParentNode()
+            }
+
+        guard engine.stage.rawValue >=
+                PeptideStage.aminoAcidAssembly.rawValue
+        else {
+            return
+        }
+
+        for (index, residue)
+            in engine.aminoAcids.enumerated() {
+
+            let sphere =
+                SCNSphere(
+                    radius:
+                        0.55
+                )
+
+            sphere.firstMaterial =
+                residueMaterial(
+                    coupling:
+                        engine.bQ
+                )
+
+            let node =
+                SCNNode(
+                    geometry:
+                        sphere
+                )
+
+            node.position =
+                SCNVector3(
+                    residue.center.x,
+                    residue.center.y,
+                    residue.center.z
+                )
+
+            node.opacity =
+                0.38
+
+            residueContainer.addChildNode(
+                node
+            )
+
+            if engine.stage ==
+                .aminoAcidAssembly {
+
+                let pulse =
+                    SCNAction.sequence([
+                        SCNAction.scale(
+                            to: 1.2,
+                            duration: 0.3
+                        ),
+
+                        SCNAction.scale(
+                            to: 0.95,
+                            duration: 0.3
+                        )
+                    ])
+
+                node.runAction(
+                    SCNAction.repeatForever(
+                        pulse
+                    )
+                )
+            }
+        }
+    }
+
+    // MARK: Bonds
+
+    private func updateBonds(
+        engine: PeptideSimulationEngine
+    ) {
+
+        bondContainer
+            .childNodes
+            .forEach {
+                $0.removeFromParentNode()
+            }
+
+        guard engine.stage.rawValue >=
+                PeptideStage.peptideBond.rawValue
+        else {
+            return
+        }
+
+        for bond in engine.peptideBonds {
+
+            guard bond.accepted,
+                  bond.firstResidue <
+                    engine.aminoAcids.count,
+                  bond.secondResidue <
+                    engine.aminoAcids.count
+            else {
+                continue
+            }
+
+            let first =
+                engine.aminoAcids[
+                    bond.firstResidue
+                ]
+
+            let second =
+                engine.aminoAcids[
+                    bond.secondResidue
+                ]
+
+            let node =
+                makeCylinder(
+                    from:
+                        first.center,
+
+                    to:
+                        second.center,
+
+                    radius:
+                        0.10
+                )
+
+            node.geometry?.firstMaterial =
+                bondMaterial()
+            
+            bondContainer.addChildNode(
                 node
             )
         }
+    }
 
-        // MARK: - Element Colors
+    // MARK: Stage animation
 
-        private func elementColor(
-            _ element: ElementType
-        ) -> UIColor {
+    private func animateToStage(
+        _ stage: PeptideStage
+    ) {
 
-            switch element {
+        switch stage {
 
-            case .hydrogen:
-                return .white
+        case .independentParticles:
 
-            case .carbon:
-                return .gray
+            contentNode.opacity =
+                1
 
-            case .nitrogen:
-                return .blue
+            atomContainer.opacity =
+                1
 
-            case .oxygen:
-                return .red
+            shellContainer.opacity =
+                0
 
-            case .sulfur:
-                return .yellow
-            }
+            forceContainer.opacity =
+                0
+
+            couplingContainer.opacity =
+                0
+
+            residueContainer.opacity =
+                0
+
+            bondContainer.opacity =
+                0
+
+        case .energyShells:
+
+            shellContainer.opacity =
+                1
+
+            forceContainer.opacity =
+                0
+
+            couplingContainer.opacity =
+                0
+
+        case .qrtlCoupling:
+
+            shellContainer.opacity =
+                1
+
+            couplingContainer.opacity =
+                1
+
+            forceContainer.opacity =
+                1
+
+        case .molecularConfiguration:
+
+            shellContainer.opacity =
+                1
+
+            couplingContainer.opacity =
+                1
+
+            forceContainer.opacity =
+                1
+
+        case .aminoAcidAssembly:
+
+            residueContainer.opacity =
+                1
+
+            couplingContainer.opacity =
+                0.6
+
+            forceContainer.opacity =
+                0.8
+
+        case .peptideBond:
+
+            residueContainer.opacity =
+                1
+
+            forceContainer.opacity =
+                1
+
+            bondContainer.opacity =
+                1
+
+        case .peptideChain:
+
+            residueContainer.opacity =
+                1
+
+            bondContainer.opacity =
+                1
+
+            forceContainer.opacity =
+                0.5
+
+        case .conformation:
+
+            residueContainer.opacity =
+                1
+
+            bondContainer.opacity =
+                1
+
+            forceContainer.opacity =
+                0.35
+
+        case .validation:
+
+            residueContainer.opacity =
+                1
+
+            bondContainer.opacity =
+                1
+
+            forceContainer.opacity =
+                0.2
+        }
+    }
+
+    // MARK: Geometry
+
+    private func makeCylinder(
+        from start: SIMD3<Float>,
+        to end: SIMD3<Float>,
+        radius: CGFloat
+    ) -> SCNNode {
+
+        let vector =
+            end - start
+
+        let length =
+            simd_length(vector)
+
+        let cylinder =
+            SCNCylinder(
+                radius:
+                    radius,
+
+                height:
+                    CGFloat(length)
+            )
+
+        let node =
+            SCNNode(
+                geometry:
+                    cylinder
+            )
+
+        let midpoint =
+            (start + end) *
+            0.5
+
+        node.position =
+            SCNVector3(
+                midpoint.x,
+                midpoint.y,
+                midpoint.z
+            )
+
+        let direction =
+            vector / max(length, 0.0001)
+
+        let yAxis =
+            SIMD3<Float>(
+                0,
+                1,
+                0
+            )
+
+        let dot =
+            max(
+                -1,
+                min(
+                    1,
+                    simd_dot(
+                        yAxis,
+                        direction
+                    )
+                )
+            )
+
+        let angle =
+            acos(dot)
+
+        let axis =
+            simd_cross(
+                yAxis,
+                direction
+            )
+
+        if simd_length(axis) >
+            0.0001 {
+
+            node.rotation =
+                SCNVector4(
+                    axis.x,
+                    axis.y,
+                    axis.z,
+                    angle
+                )
+
+        } else if dot < 0 {
+
+            node.rotation =
+                SCNVector4(
+                    1,
+                    0,
+                    0,
+                    Float.pi
+                )
         }
 
+        return node
+    }
+
+    // MARK: Materials
+
+    private func atomMaterial(
+        element: ElementType
+    ) -> SCNMaterial {
+
+        let material =
+            SCNMaterial()
+
+        material.diffuse.contents =
+            element.displayColor
+
+        material.specular.contents =
+            UIColor.white
+
+        material.shininess =
+            0.8
+
+        return material
+    }
+
+    private func shellMaterial()
+        -> SCNMaterial {
+
+        let material =
+            SCNMaterial()
+
+        material.diffuse.contents =
+            UIColor.systemPurple.withAlphaComponent(
+                0.45
+            )
+
+        material.emission.contents =
+            UIColor.systemPurple
+
+        material.transparency =
+            0.55
+
+        return material
+    }
+
+    private func couplingMaterial(
+        strength: Double
+    ) -> SCNMaterial {
+
+        let material =
+            SCNMaterial()
+
+        let alpha =
+            CGFloat(
+                0.20 +
+                min(
+                    max(
+                        strength,
+                        0
+                    ),
+                    1
+                ) *
+                0.65
+            )
+
+        material.diffuse.contents =
+            UIColor.systemCyan.withAlphaComponent(
+                alpha
+            )
+
+        material.emission.contents =
+            UIColor.systemCyan
+
+        material.transparency =
+            alpha
+
+        return material
+    }
+
+    private func forceMaterial(
+        magnitude: Double
+    ) -> SCNMaterial {
+
+        let material =
+            SCNMaterial()
+
+        let normalized =
+            min(
+                max(
+                    magnitude,
+                    0
+                ),
+                1
+            )
+
+        material.diffuse.contents =
+            UIColor.systemOrange.withAlphaComponent(
+                CGFloat(
+                    0.35 +
+                    normalized *
+                    0.60
+                )
+            )
+
+        material.emission.contents =
+            UIColor.systemOrange
+
+        return material
+    }
+
+    private func residueMaterial(
+        coupling: Double
+    ) -> SCNMaterial {
+
+        let material =
+            SCNMaterial()
+
+        let alpha =
+            CGFloat(
+                0.25 +
+                min(
+                    max(
+                        coupling,
+                        0
+                    ),
+                    1
+                ) *
+                0.55
+            )
+
+        material.diffuse.contents =
+            UIColor.systemGreen.withAlphaComponent(
+                alpha
+            )
+
+        return material
+    }
+
+    private func bondMaterial()
+        -> SCNMaterial {
+
+        let material =
+            SCNMaterial()
+
+        material.diffuse.contents =
+            UIColor.systemOrange
+
+        material.emission.contents =
+            UIColor.systemOrange
+
+        return material
+    }
+}
+
+// MARK: - SceneKit View
+
+struct PeptideSceneView:
+    UIViewRepresentable {
+
+    @ObservedObject
+    var engine:
+        PeptideSimulationEngine
+
+    func makeCoordinator()
+        -> Coordinator {
+
+        Coordinator(
+            engine:
+                engine
+        )
+    }
+
+    func makeUIView(
+        context:
+            Context
+    ) -> SCNView {
+
+        let view =
+            SCNView()
+
+        context.coordinator
+            .controller
+            .attach(
+                to:
+                    view
+            )
+
+        return view
+    }
+
+    func updateUIView(
+        _ view: SCNView,
+        context:
+            Context
+    ) {
+
+        context.coordinator
+            .controller
+            .update(
+                engine:
+                    engine
+            )
+    }
+
+    final class Coordinator {
+
+        let controller:
+            PeptideSceneController
+
+        init(
+            engine:
+                PeptideSimulationEngine
+        ) {
+
+            controller =
+                PeptideSceneController()
+        }
+    }
 }
 
 // MARK: - Content View
 
-struct ContentView: View {
+struct ContentView:
+    View {
 
     @StateObject
     private var engine =
@@ -1329,21 +2516,34 @@ struct ContentView: View {
 
                     pipeline
 
-                    PeptideSceneView(
-                        engine: engine
-                    )
-                    .frame(
-                        height: 360
-                    )
-                    .clipShape(
-                        RoundedRectangle(
-                            cornerRadius: 18
+                    ZStack(
+                        alignment:
+                            .topLeading
+                    ) {
+
+                        PeptideSceneView(
+                            engine:
+                                engine
                         )
-                    )
+                        .frame(
+                            height:
+                                390
+                        )
+                        .clipShape(
+                            RoundedRectangle(
+                                cornerRadius:
+                                    18
+                            )
+                        )
+
+                        stageOverlay
+                    }
 
                     stageCard
 
                     equationCard
+
+                    forceCard
 
                     metricsCard
 
@@ -1368,19 +2568,21 @@ struct ContentView: View {
     private var header: some View {
 
         VStack(
-            alignment: .leading,
-            spacing: 6
+            alignment:
+                .leading,
+            spacing:
+                6
         ) {
 
             Text(
-                "Equation-Driven Molecular Assembly"
+                "QRTL-Driven Molecular Assembly"
             )
             .font(
                 .title2.bold()
             )
 
             Text(
-                "Independent particles → molecular structure → peptide chain"
+                "The animation shows the calculated QRTL interaction acting on the molecular system before each transition."
             )
             .font(
                 .subheadline
@@ -1390,8 +2592,10 @@ struct ContentView: View {
             )
         }
         .frame(
-            maxWidth: .infinity,
-            alignment: .leading
+            maxWidth:
+                .infinity,
+            alignment:
+                .leading
         )
     }
 
@@ -1400,165 +2604,400 @@ struct ContentView: View {
     private var pipeline: some View {
 
         VStack(
-            alignment: .leading,
-            spacing: 8
+            alignment:
+                .leading,
+            spacing:
+                4
         ) {
 
-            Text("PIPELINE")
-                .font(
-                    .caption.bold()
-                )
-
             ForEach(
-                PeptideStage.allCases,
-                id: \.self
-            ) { stage in
+                PeptideStage.allCases
+            ) { item in
 
-                HStack {
+                HStack(
+                    spacing:
+                        8
+                ) {
 
-                    Image(
-                        systemName:
-                            stage.rawValue <=
-                            engine.stage.rawValue
-                            ? "checkmark.circle.fill"
-                            : "circle"
-                    )
+                    Circle()
+                        .fill(
+                            item.rawValue <
+                                engine.stage.rawValue
+                            ? Color.green
+                            : item ==
+                                engine.stage
+                            ? Color.orange
+                            : Color.gray.opacity(
+                                0.35
+                            )
+                        )
+                        .frame(
+                            width:
+                                10,
+                            height:
+                                10
+                        )
 
                     Text(
-                        stage.title
+                        item.shortName
+                    )
+                    .font(
+                        .caption
+                    )
+                    .fontWeight(
+                        item ==
+                            engine.stage
+                        ? .bold
+                        : .regular
                     )
 
-                    Spacer()
-
-                    if stage ==
+                    if item ==
                         engine.stage {
 
-                        Text("CURRENT")
-                            .font(
-                                .caption2.bold()
-                            )
+                        Text(
+                            "CURRENT"
+                        )
+                        .font(
+                            .caption2.bold()
+                        )
+                        .foregroundStyle(
+                            .orange
+                        )
                     }
                 }
-                .foregroundStyle(
-                    stage.rawValue <=
-                    engine.stage.rawValue
-                    ? .primary
-                    : .secondary
-                )
             }
         }
+        .frame(
+            maxWidth:
+                .infinity,
+            alignment:
+                .leading
+        )
         .padding()
         .background(
-            RoundedRectangle(
-                cornerRadius: 16
+            Color.secondary.opacity(
+                0.10
             )
-            .fill(
-                Color.secondary
-                    .opacity(0.10)
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius:
+                    14
             )
         )
     }
 
-    // MARK: Stage
+    // MARK: Stage overlay
 
-    private var stageCard: some View {
+    private var stageOverlay: some View {
 
         VStack(
-            alignment: .leading,
-            spacing: 8
+            alignment:
+                .leading,
+            spacing:
+                4
         ) {
+
+            Text(
+                "STEP \(engine.stage.rawValue + 1) / \(PeptideStage.allCases.count)"
+            )
+            .font(
+                .caption.bold()
+            )
 
             Text(
                 engine.stage.title
             )
             .font(
-                .title3.bold()
+                .headline.bold()
             )
 
             Text(
                 engine.stage.explanation
             )
-            .foregroundStyle(
-                .secondary
+            .font(
+                .caption
+            )
+            .fixedSize(
+                horizontal:
+                    false,
+                vertical:
+                    true
+            )
+        }
+        .foregroundStyle(
+            .white
+        )
+        .padding(
+            12
+        )
+        .background(
+            Color.black.opacity(
+                0.72
+            )
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius:
+                    12
+            )
+        )
+        .padding(
+            12
+        )
+    }
+
+    // MARK: Stage card
+
+    private var stageCard: some View {
+
+        VStack(
+            alignment:
+                .leading,
+            spacing:
+                8
+        ) {
+
+            Text(
+                "What is happening now"
+            )
+            .font(
+                .headline
+            )
+
+            Text(
+                stageDescription
+            )
+            .font(
+                .body
             )
 
             ProgressView(
-                value: engine.progress
+                value:
+                    engine.progress
             )
         }
         .frame(
-            maxWidth: .infinity,
-            alignment: .leading
+            maxWidth:
+                .infinity,
+            alignment:
+                .leading
         )
         .padding()
         .background(
-            RoundedRectangle(
-                cornerRadius: 16
+            Color.secondary.opacity(
+                0.10
             )
-            .fill(
-                Color.secondary
-                    .opacity(0.10)
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius:
+                    14
             )
         )
     }
 
-    // MARK: Equations
+    private var stageDescription: String {
+
+        switch engine.stage {
+
+        case .independentParticles:
+            return "The atoms are separated. No QRTL force is being applied yet."
+
+        case .energyShells:
+            return "QRTL shell energy has been assigned to each atom."
+
+        case .qrtlCoupling:
+            return "The QRTL field is evaluating which nearby atoms can interact. Force arrows now show the direction of the calculated interaction."
+
+        case .molecularConfiguration:
+            return "The calculated QRTL force is moving the atoms. The positions are changing because of the force calculation."
+
+        case .aminoAcidAssembly:
+            return "The force-organized atoms are being grouped into the amino-acid structures."
+
+        case .peptideBond:
+            return "The reactive regions are being evaluated for a favorable peptide-bond interaction."
+
+        case .peptideChain:
+            return "Accepted peptide-bond interactions connect the residues into a chain."
+
+        case .conformation:
+            return "The assembled chain is evaluated in candidate three-dimensional configurations."
+
+        case .validation:
+            return "The final structure and energy relationships are checked for internal model consistency."
+        }
+    }
+
+    // MARK: Equation card
 
     private var equationCard: some View {
 
         VStack(
-            alignment: .leading,
-            spacing: 10
+            alignment:
+                .leading,
+            spacing:
+                10
         ) {
 
-            Text("QRTL EQUATIONS")
-                .font(
-                    .headline
-                )
+            Text(
+                "QRTL Equations"
+            )
+            .font(
+                .headline
+            )
 
             Text(
                 "B_Q = I_Q · R · D · F · P · O"
             )
             .font(
-                .system(.body, design: .monospaced)
+                .system(
+                    .body,
+                    design:
+                        .monospaced
+                )
             )
 
             Text(
                 "E_QRTL = −B_Q · C · cos(Δφ) · ρ"
             )
             .font(
-                .system(.body, design: .monospaced)
+                .system(
+                    .body,
+                    design:
+                        .monospaced
+                )
             )
 
             Text(
                 "E_effective = E_classical + E_QRTL"
             )
             .font(
-                .system(.body, design: .monospaced)
+                .system(
+                    .body,
+                    design:
+                        .monospaced
+                )
             )
 
+            Divider()
+
             Text(
-                "The QRTL terms are model assumptions used by this simulation."
+                "The QRTL force is calculated from the spatial dependence of the coupling and is then applied to the atom positions."
             )
             .font(
                 .caption
+            )
+
+            Text(
+                "QRTL terms are proposed computational model assumptions, not established experimental molecular physics."
+            )
+            .font(
+                .caption2
             )
             .foregroundStyle(
                 .secondary
             )
         }
         .frame(
-            maxWidth: .infinity,
-            alignment: .leading
+            maxWidth:
+                .infinity,
+            alignment:
+                .leading
         )
         .padding()
         .background(
-            RoundedRectangle(
-                cornerRadius: 16
+            Color.secondary.opacity(
+                0.10
             )
-            .fill(
-                Color.secondary
-                    .opacity(0.10)
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius:
+                    14
+            )
+        )
+    }
+
+    // MARK: Force card
+
+    private var forceCard: some View {
+
+        VStack(
+            alignment:
+                .leading,
+            spacing:
+                8
+        ) {
+
+            Text(
+                "QRTL Force Field"
+            )
+            .font(
+                .headline
+            )
+
+            HStack {
+
+                metric(
+                    title:
+                        "Active Interactions",
+
+                    value:
+                        "\(engine.qrtlForces.count)"
+                )
+
+                metric(
+                    title:
+                        "Max Force",
+
+                    value:
+                        String(
+                            format:
+                                "%.4f",
+                            engine.activeForceMagnitude
+                        )
+                )
+            }
+
+            Text(
+                engine.activeForceDescription
+            )
+            .font(
+                .caption
+            )
+
+            if engine.stage.rawValue >=
+                PeptideStage.qrtlCoupling.rawValue {
+
+                Text(
+                    "Orange arrows show the instantaneous QRTL force direction. The arrows act on the atoms; the resulting position change is then recalculated into the next QRTL state."
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+            }
+        }
+        .frame(
+            maxWidth:
+                .infinity,
+            alignment:
+                .leading
+        )
+        .padding()
+        .background(
+            Color.orange.opacity(
+                0.10
+            )
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius:
+                    14
             )
         )
     }
@@ -1568,85 +3007,160 @@ struct ContentView: View {
     private var metricsCard: some View {
 
         VStack(
-            alignment: .leading,
-            spacing: 12
+            alignment:
+                .leading,
+            spacing:
+                8
         ) {
 
-            Text("LIVE MODEL STATE")
-                .font(
-                    .headline
+            Text(
+                "Live Metrics"
+            )
+            .font(
+                .headline
+            )
+
+            HStack {
+
+                metric(
+                    title:
+                        "B_Q",
+
+                    value:
+                        String(
+                            format:
+                                "%.3f",
+                            engine.bQ
+                        )
                 )
 
-            metric(
-                "B_Q",
-                engine.bQ
-            )
+                metric(
+                    title:
+                        "QRTL Energy",
 
-            metric(
-                "QRTL Energy",
-                engine.qrtlEnergy
-            )
+                    value:
+                        String(
+                            format:
+                                "%.3f",
+                            engine.qrtlEnergy
+                        )
+                )
+            }
 
-            metric(
-                "Effective Energy",
-                engine.effectiveEnergy
-            )
+            HStack {
 
-            metric(
-                "Coupling",
-                engine.coupling
-            )
+                metric(
+                    title:
+                        "Effective Energy",
 
-            metric(
-                "Phase Error",
-                engine.phaseError
-            )
+                    value:
+                        String(
+                            format:
+                                "%.3f",
+                            engine.effectiveEnergy
+                        )
+                )
 
-            metric(
-                "Stability",
-                engine.stability
-            )
+                metric(
+                    title:
+                        "Coupling",
+
+                    value:
+                        String(
+                            format:
+                                "%.3f",
+                            engine.coupling
+                        )
+                )
+            }
+
+            HStack {
+
+                metric(
+                    title:
+                        "Phase Error",
+
+                    value:
+                        String(
+                            format:
+                                "%.3f",
+                            engine.phaseError
+                        )
+                )
+
+                metric(
+                    title:
+                        "Stability",
+
+                    value:
+                        String(
+                            format:
+                                "%.3f",
+                            engine.stability
+                        )
+                )
+            }
         }
         .frame(
-            maxWidth: .infinity,
-            alignment: .leading
+            maxWidth:
+                .infinity,
+            alignment:
+                .leading
         )
         .padding()
         .background(
-            RoundedRectangle(
-                cornerRadius: 16
+            Color.secondary.opacity(
+                0.10
             )
-            .fill(
-                Color.secondary
-                    .opacity(0.10)
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius:
+                    14
             )
         )
     }
 
     private func metric(
-        _ name: String,
-        _ value: Double
+        title:
+            String,
+
+        value:
+            String
     ) -> some View {
 
-        HStack {
-
-            Text(name)
-
-            Spacer()
+        VStack(
+            alignment:
+                .leading
+        ) {
 
             Text(
-                String(
-                    format: "%.4f",
-                    value
-                )
+                title
+            )
+            .font(
+                .caption
+            )
+            .foregroundStyle(
+                .secondary
+            )
+
+            Text(
+                value
             )
             .font(
                 .system(
                     .body,
-                    design: .monospaced
+                    design:
+                        .monospaced
                 )
             )
         }
+        .frame(
+            maxWidth:
+                .infinity,
+            alignment:
+                .leading
+        )
     }
 
     // MARK: Validation
@@ -1654,51 +3168,42 @@ struct ContentView: View {
     private var validationCard: some View {
 
         VStack(
-            alignment: .leading,
-            spacing: 10
+            alignment:
+                .leading,
+            spacing:
+                8
         ) {
 
-            Text("VALIDATION")
-                .font(
-                    .headline
-                )
-
             Text(
-                "A valid simulation result requires accepted coupling, stable molecular configuration, and accepted peptide-bond candidates."
+                "Model Validation"
+            )
+            .font(
+                .headline
             )
 
             Text(
-                "Residues: \(engine.aminoAcids.count)"
+                engine.validationMessage
             )
-
-            Text(
-                "Candidate bonds: \(engine.peptideBonds.count)"
-            )
-
-            Text(
-                "Accepted bonds: \(engine.peptideBonds.filter { $0.accepted }.count)"
-            )
-
-            Text(
-                "Final stability: " +
-                String(
-                    format: "%.3f",
-                    engine.stability
-                )
+            .font(
+                .caption
             )
         }
         .frame(
-            maxWidth: .infinity,
-            alignment: .leading
+            maxWidth:
+                .infinity,
+            alignment:
+                .leading
         )
         .padding()
         .background(
-            RoundedRectangle(
-                cornerRadius: 16
+            Color.green.opacity(
+                0.10
             )
-            .fill(
-                Color.secondary
-                    .opacity(0.10)
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius:
+                    14
             )
         )
     }
@@ -1707,26 +3212,36 @@ struct ContentView: View {
 
     private var controls: some View {
 
-        HStack {
+        HStack(
+            spacing:
+                12
+        ) {
 
-            Button("Reset") {
+            Button(
+                "Reset"
+            ) {
+
                 engine.reset()
             }
 
-            Button("Previous") {
+            Button(
+                "Previous"
+            ) {
+
                 engine.previous()
             }
             .disabled(
-                engine.stage == .independentParticles
+                engine.stage ==
+                    .independentParticles
             )
 
-            Spacer()
-
             Button(
-                engine.stage == .validation
+                engine.stage ==
+                    .validation
                 ? "Restart"
                 : "Advance"
             ) {
+
                 engine.advance()
             }
             .buttonStyle(
@@ -1735,10 +3250,3 @@ struct ContentView: View {
         }
     }
 }
-
-// MARK: - Preview
-
-#Preview {
-    ContentView()
-}
-
