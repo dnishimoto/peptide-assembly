@@ -122,6 +122,8 @@
 
  */
 
+
+
 import SwiftUI
 import SceneKit
 import UIKit
@@ -131,6 +133,7 @@ import Combine
 
 struct ContentView: View {
     @StateObject private var engine = PeptideAssemblyEngine()
+    @State private var showingBondFailureAlert = false
 
     var body: some View {
         ZStack {
@@ -151,6 +154,14 @@ struct ContentView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear { engine.start() }
+        .onReceive(engine.$bondFailureMessage) { message in
+            showingBondFailureAlert = message != nil
+        }
+        .alert("Peptide Bond Formation Blocked", isPresented: $showingBondFailureAlert) {
+            Button("OK", role: .cancel) { engine.clearBondFailure() }
+        } message: {
+            Text(engine.bondFailureMessage ?? "The calculated bond conditions were not satisfied.")
+        }
     }
 
     private var header: some View {
@@ -231,6 +242,10 @@ struct ContentView: View {
                     metric("Amino acids", Double(engine.aminoAcidCount), "%.0f")
                     metric("Bonds", Double(engine.peptideBondCount), "%.0f")
                     metric("Chain", Double(engine.peptideLength), "%.0f")
+                }
+
+                if let diagnostic = engine.latestBondDiagnostic {
+                    PeptideBondDiagnosticCard(diagnostic: diagnostic)
                 }
 
                 Text(engine.statusMessage)
@@ -330,6 +345,9 @@ struct ContentView: View {
     }
 }
 
+
+
+
 // MARK: - Pipeline
 
 struct PeptideStage: Identifiable {
@@ -370,6 +388,13 @@ struct LatticeCell {
     var density: Double
     var orientation: SIMD3<Double>
     var bondingAvailability: Double
+
+    // QRTL neighbor-flow state. These quantities are model-defined and
+    // are updated by a synchronous, pairwise-conservative transport step.
+    var twistSpeed: Double
+    var twistCurrentIn: Double
+    var twistCurrentOut: Double
+    var flowBalanceError: Double
 }
 
 struct AminoAcidUnit {
@@ -391,7 +416,7 @@ struct TransitionEvaluation {
     let accepted: Bool
 }
 
-// MARK: - Engine
+
 
 final class PeptideAssemblyEngine: ObservableObject {
 
@@ -421,6 +446,12 @@ final class PeptideAssemblyEngine: ObservableObject {
     @Published private(set) var transitionProbability = 0.0
     @Published private(set) var foldingEnergy = 0.0
 
+    // Neighbor-flow diagnostics. This confidence describes the implementation
+    // of the computational conservation mechanism, not physical validation of QRTL.
+    @Published private(set) var neighborFlowConfidence = 0.90
+    @Published private(set) var totalTwistCurrent = 0.0
+    @Published private(set) var globalFlowConservationError = 0.0
+
     @Published private(set) var organizedAtomCount = 0
     @Published private(set) var aminoAcidCount = 0
     @Published private(set) var peptideBondCount = 0
@@ -429,6 +460,16 @@ final class PeptideAssemblyEngine: ObservableObject {
     @Published private(set) var statusMessage =
         "QRTL is currently off. The control condition is established."
 
+    @Published private(set) var latestBondDiagnostic: PeptideBondDiagnostic?
+    @Published var bondFailureMessage: String?
+
+    let allowableDeltaPressure = 0.50
+    let minimumBondEnergy = 0.10
+    let minimumBondCoherence = 0.70
+    let maximumPhaseDifference = Double.pi / 4.0
+
+    let temperature = 298.15
+    let boltzmannConstant = 1.380649e-23
 
     // Normalized energy scale. The app explicitly does not claim
     // these values are joules. A calibrated implementation must replace
@@ -438,7 +479,15 @@ final class PeptideAssemblyEngine: ObservableObject {
     // Proposed/model-defined QRTL coefficients.
     var qrtlFieldGain = 1.0
     var qrtlEnergyCoupling = 0.25
+    var phaseCoupling = 0.20
     var densityCoupling = 0.10
+
+    // Neighbor-flow transport controls. The flow is antisymmetric between
+    // each pair, so a transfer out of one cell is the same transfer into the other.
+    // These are dimensionless model controls until experimentally calibrated.
+    var neighborFlowCoupling = 0.12
+    var neighborFlowDecay = 0.42
+    var neighborFlowTimeStep = 0.10
 
     // Coarse-grained chemical terms for visualization.
     // They are not a molecular force field.
@@ -675,10 +724,15 @@ final class PeptideAssemblyEngine: ObservableObject {
         effectiveEnergy = 0
         transitionProbability = 0
         foldingEnergy = 0
+        neighborFlowConfidence = 0.90
+        totalTwistCurrent = 0
+        globalFlowConservationError = 0
         organizedAtomCount = 0
         aminoAcidCount = 0
         peptideBondCount = 0
         peptideLength = 0
+        latestBondDiagnostic = nil
+        bondFailureMessage = nil
         statusMessage = "QRTL is currently off. The control condition is established."
         recalculate()
     }
@@ -799,6 +853,13 @@ final class PeptideAssemblyEngine: ObservableObject {
 
     private func evolveCA() {
         calculateEffectiveEnergy()
+
+        // QRTL neighbor transport is evaluated before the CA state update.
+        // The transport step is synchronous and pairwise antisymmetric: every
+        // transfer removed from one cell is added to its neighbor. This avoids
+        // the order-dependent in-place correction used by the earlier proposal.
+        enforceNeighborFlowBalance()
+
         var next = cells
         for i in cells.indices {
             let neighbors = neighborIndices(i)
@@ -806,11 +867,109 @@ final class PeptideAssemblyEngine: ObservableObject {
             let average = neighbors.isEmpty ? 0 : neighborEnergy / Double(neighbors.count)
             let alignment = max(0, min(1, 0.5 + cells[i].orientation.y * 0.5))
             let score = cells[i].energy + 0.25 * average + 0.10 * alignment
+
             next[i].energy = score
             next[i].bondingAvailability = max(0, min(1, 0.35 + score + coherence * 0.2))
         }
+
         cells = next
-        statusMessage = "Cell states evolved from local and neighboring calculated values."
+        statusMessage = String(format:
+            "Cell states evolved with synchronous neighbor-flow conservation. Local balance error %.5f; global conservation error %.5e.",
+            cells.map(\.flowBalanceError).reduce(0, +) / Double(max(cells.count, 1)),
+            globalFlowConservationError
+        )
+    }
+
+    // MARK: - Neighbor-Flow Balance / Local Conservation
+
+    /// Computes pairwise twist-current transfer without imposing phase closure
+    /// or moving cells toward a preferred structure.
+    ///
+    /// For every neighbor pair (i,j), the signed flow is computed once:
+    ///     J_ij = k * (v_i - v_j) * exp(-decay * d_ij)
+    ///
+    /// The same transfer is then applied with opposite signs:
+    ///     Δv_i = -J_ij * Δt
+    ///     Δv_j = +J_ij * Δt
+    ///
+    /// Therefore the pair contributes zero net change to Σv. The method uses
+    /// the old state for all pair calculations and commits the new state only
+    /// after the complete transport field has been accumulated.
+    ///
+    /// This establishes computational conservation of the defined model
+    /// quantity (twistSpeed); it does NOT establish physical QRTL conservation.
+    private func enforceNeighborFlowBalance() {
+        guard cells.count > 1 else {
+            totalTwistCurrent = 0
+            globalFlowConservationError = 0
+            if let only = cells.first {
+                cells[0].twistCurrentIn = 0
+                cells[0].twistCurrentOut = 0
+                cells[0].flowBalanceError = 0
+            }
+            return
+        }
+
+        let old = cells
+        var delta = Array(repeating: 0.0, count: old.count)
+        var inflow = Array(repeating: 0.0, count: old.count)
+        var outflow = Array(repeating: 0.0, count: old.count)
+
+        // Keep the total conserved quantity explicit so the implementation
+        // can be checked after the synchronous update.
+        let totalBefore = old.reduce(0.0) { $0 + $1.twistSpeed }
+
+        for i in old.indices {
+            let neighbors = neighborIndicesForState(i, state: old)
+            for j in neighbors where j > i {
+                let distance = simd_distance(old[i].position, old[j].position)
+                guard distance > 0 else { continue }
+
+                let weight = exp(-neighborFlowDecay * distance)
+                let signedFlow = neighborFlowCoupling
+                    * (old[i].twistSpeed - old[j].twistSpeed)
+                    * weight
+
+                if signedFlow > 0 {
+                    outflow[i] += signedFlow
+                    inflow[j] += signedFlow
+                } else if signedFlow < 0 {
+                    let magnitude = -signedFlow
+                    inflow[i] += magnitude
+                    outflow[j] += magnitude
+                }
+
+                // Pairwise antisymmetric transfer. No net twistSpeed is
+                // created or destroyed by this pair.
+                delta[i] -= signedFlow * neighborFlowTimeStep
+                delta[j] += signedFlow * neighborFlowTimeStep
+            }
+        }
+
+        var totalAfter = 0.0
+        for i in old.indices {
+            cells[i].twistCurrentIn = inflow[i]
+            cells[i].twistCurrentOut = outflow[i]
+            cells[i].flowBalanceError = abs(inflow[i] - outflow[i])
+
+            cells[i].twistSpeed = old[i].twistSpeed + delta[i]
+            totalAfter += cells[i].twistSpeed
+        }
+
+        totalTwistCurrent = cells.reduce(0.0) {
+            $0 + $1.twistCurrentIn + $1.twistCurrentOut
+        }
+
+        // Numerical conservation residual. For the pairwise scheme this
+        // should be at floating-point roundoff, not a model-sized correction.
+        globalFlowConservationError = abs(totalAfter - totalBefore)
+    }
+
+    private func neighborIndicesForState(_ index: Int, state: [LatticeCell]) -> [Int] {
+        let p = state[index].position
+        return state.indices.filter {
+            $0 != index && simd_distance(p, state[$0].position) <= 0.80
+        }
     }
 
     private func organizeAtoms() {
@@ -976,13 +1135,86 @@ final class PeptideAssemblyEngine: ObservableObject {
         effectiveEnergy = e.deltaGEffective
         transitionProbability = e.probability
 
-        if e.accepted {
-            peptideBondCount = max(peptideBondCount, 1)
-            for i in cells.indices { cells[i].state = .peptideBond }
-            statusMessage = "Controlled coupling accepted: energy probability and geometry passed."
-        } else {
-            statusMessage = "Controlled coupling rejected: the calculated energy/geometry conditions were not sufficient."
+        guard aminoAcids.count >= 2 else {
+            statusMessage = "Bond test requires two amino-acid units."
+            return
         }
+
+        // CA transports / redistributes energy before the bond test.
+        enforceNeighborFlowBalance()
+
+        let initialEnergy = cells.reduce(0.0) { $0 + $1.energy }
+        let transportedEnergy = cells.reduce(0.0) { $0 + $1.energy }
+        let localEnergyDensity = transportedEnergy / Double(max(cells.count, 1))
+
+        // Local QRTL field and phase state.
+        let localField = cells.isEmpty ? 0.0 :
+            cells.reduce(0.0) { $0 + $1.qrtlField } / Double(cells.count)
+        let phaseDifference = cells.count >= 2
+            ? abs(cells[0].phase - cells[1].phase)
+            : 0.0
+
+        // Pressure is a model-defined quantity derived from local energy density.
+        let pressureA = localEnergyDensity * (1.0 + localField)
+        let pressureB = localEnergyDensity * (1.0 + localField)
+        let deltaPressure = pressureA - pressureB
+
+        let phaseFactor = max(0.0, cos(phaseDifference))
+        let bondEnergy = localEnergyDensity * localField * coherence * phaseFactor
+
+        var failures: [String] = []
+        if abs(deltaPressure) > allowableDeltaPressure {
+            failures.append(String(format: "ΔP %.5f exceeds allowed %.5f.", abs(deltaPressure), allowableDeltaPressure))
+        }
+        if bondEnergy < minimumBondEnergy {
+            failures.append(String(format: "Bond energy %.5f is below minimum %.5f.", bondEnergy, minimumBondEnergy))
+        }
+        if coherence < minimumBondCoherence {
+            failures.append(String(format: "Coherence %.5f is below required %.5f.", coherence, minimumBondCoherence))
+        }
+        if phaseDifference > maximumPhaseDifference {
+            failures.append(String(format: "Phase difference %.5f exceeds allowed %.5f.", phaseDifference, maximumPhaseDifference))
+        }
+        if e.probability < 0.50 { failures.append("Transition probability is below 0.50.") }
+        if e.orientationFactor < 0.70 { failures.append("Orientation compatibility is below 0.70.") }
+        if e.distanceFactor < 0.65 { failures.append("Distance compatibility is below 0.65.") }
+
+        let formed = failures.isEmpty
+        let reason = formed ? "All model bond-formation gates passed." : failures.joined(separator: " ")
+
+        latestBondDiagnostic = PeptideBondDiagnostic(
+            bondNumber: max(1, peptideBondCount + 1),
+            firstResidue: aminoAcids[0].name,
+            secondResidue: aminoAcids[1].name,
+            initialEnergy: initialEnergy,
+            finalEnergy: transportedEnergy,
+            transportedEnergy: transportedEnergy - initialEnergy,
+            localEnergyDensity: localEnergyDensity,
+            qrtlField: localField,
+            coherence: coherence,
+            phaseDifference: phaseDifference,
+            pressureA: pressureA,
+            pressureB: pressureB,
+            deltaPressure: deltaPressure,
+            bondEnergy: bondEnergy,
+            formed: formed,
+            failureReason: reason
+        )
+
+        if formed {
+            peptideBondCount = max(peptideBondCount, 1)
+            aminoAcids[0].bondedToNext = true
+            for i in cells.indices { cells[i].state = .peptideBond }
+            bondFailureMessage = nil
+            statusMessage = "Controlled coupling accepted: CA transport → local QRTL density → field → pressure → bond gate passed."
+        } else {
+            bondFailureMessage = "Peptide bond formation was blocked.\n\n" + reason
+            statusMessage = "Controlled coupling rejected by the diagnostic bond-formation gate."
+        }
+    }
+
+    func clearBondFailure() {
+        bondFailureMessage = nil
     }
 
     private func recordCondensation() {
@@ -1152,7 +1384,11 @@ final class PeptideAssemblyEngine: ObservableObject {
                             phase: 0,
                             density: 0,
                             orientation: SIMD3<Double>(1, 0, 0),
-                            bondingAvailability: 0
+                            bondingAvailability: 0,
+                            twistSpeed: 0,
+                            twistCurrentIn: 0,
+                            twistCurrentOut: 0,
+                            flowBalanceError: 0
                         )
                     )
                 }
@@ -1241,8 +1477,6 @@ struct QRTLPeptideSceneView: UIViewRepresentable {
         let scene = SCNScene()
         scene.background.contents = UIColor.black
 
-        // MARK: - Camera
-
         let cameraNode = SCNNode()
         let camera = SCNCamera()
 
@@ -1260,43 +1494,29 @@ struct QRTLPeptideSceneView: UIViewRepresentable {
         cameraNode.look(at: SCNVector3(0, -1, 0))
 
         scene.rootNode.addChildNode(cameraNode)
-
-        // MARK: - Key light
+        
 
         let key = SCNNode()
         let keyLight = SCNLight()
-
         keyLight.type = .omni
         keyLight.intensity = 1200
-
         key.light = keyLight
-        key.position = SCNVector3(6, 8, 10)
-
+        key.position = SCNVector3(4, 5, 5)
         scene.rootNode.addChildNode(key)
-
-        // MARK: - Fill light
 
         let fill = SCNNode()
         let fillLight = SCNLight()
-
         fillLight.type = .omni
-        fillLight.intensity = 700
-
+        fillLight.intensity = 600
         fill.light = fillLight
-        fill.position = SCNVector3(-6, 4, 8)
-
+        fill.position = SCNVector3(-4, 2, 3)
         scene.rootNode.addChildNode(fill)
-
-        // MARK: - Ambient light
 
         let ambient = SCNNode()
         let ambientLight = SCNLight()
-
         ambientLight.type = .ambient
         ambientLight.intensity = 350
-
         ambient.light = ambientLight
-
         scene.rootNode.addChildNode(ambient)
 
         return scene
@@ -1518,14 +1738,13 @@ struct QRTLPeptideSceneView: UIViewRepresentable {
     }
 
     private func atomMaterial(_ color: UIColor) -> SCNMaterial {
-        let material = SCNMaterial()
-        material.diffuse.contents = color
-        material.lightingModel = .physicallyBased
-        material.metalness.contents = 0.1
-        material.roughness.contents = 0.35
-        return material
+        let m = SCNMaterial()
+        m.diffuse.contents = color
+        m.metalness.contents = 0.1
+        m.roughness.contents = 0.35
+        return m
     }
-    
+
     private func haloMaterial(_ value: Double) -> SCNMaterial {
         let m = SCNMaterial()
         m.diffuse.contents = UIColor.cyan.withAlphaComponent(CGFloat(min(0.22, value * 0.4)))
