@@ -1200,6 +1200,8 @@ final class PeptideAssemblyEngine: ObservableObject {
             formed: formed,
             failureReason: reason
         )
+        
+
 
         if formed {
             peptideBondCount = max(peptideBondCount, 1)

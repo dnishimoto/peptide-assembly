@@ -23,207 +23,186 @@ import Combine
 // MARK: - Molecular Assembly Stages
 
 enum MolecularAssemblyStage: Int, CaseIterable, Identifiable {
-case peptideBuildingBlocks = 1
-case drugIntermediate = 2
-case api = 3
-case nucleotide = 4
-case oligonucleotide = 5
-case heterocycle = 6
-case chirality = 7
-case specialtyCompound = 8
 
-var id: Int {
-    rawValue
-}
+    case peptideBuildingBlocks = 1
+    case drugIntermediate = 2
+    case api = 3
+    case nucleotide = 4
+    case oligonucleotide = 5
+    case heterocycle = 6
+    case chirality = 7
+    case specialtyCompound = 8
 
-var title: String {
-    switch self {
-    case .peptideBuildingBlocks:
-        return "Peptide Building Blocks"
-
-    case .drugIntermediate:
-        return "Drug Intermediate"
-
-    case .api:
-        return "Active Pharmaceutical Ingredient"
-
-    case .nucleotide:
-        return "Nucleoside / Nucleotide"
-
-    case .oligonucleotide:
-        return "Oligonucleotide"
-
-    case .heterocycle:
-        return "Complex Heterocycle"
-
-    case .chirality:
-        return "Chiral Molecule"
-
-    case .specialtyCompound:
-        return "Specialty Pharmaceutical Compound"
+    var id: Int {
+        rawValue
     }
-}
 
+    var title: String {
+        switch self {
+        case .peptideBuildingBlocks:
+            return "Peptide Building Blocks"
+
+        case .drugIntermediate:
+            return "Drug Intermediate"
+
+        case .api:
+            return "Active Pharmaceutical Ingredient"
+
+        case .nucleotide:
+            return "Nucleoside / Nucleotide"
+
+        case .oligonucleotide:
+            return "Oligonucleotide"
+
+        case .heterocycle:
+            return "Complex Heterocycle"
+
+        case .chirality:
+            return "Chiral Molecule"
+
+        case .specialtyCompound:
+            return "Specialty Pharmaceutical Compound"
+        }
+    }
 }
 
 // MARK: - Peptide Residue
 
 struct PeptideResidue: Identifiable, Hashable {
 
-let id = UUID()
+    let id = UUID()
+    let name: String
+    let residueFormula: String
 
-let name: String
-let residueFormula: String
+    init(
+        name: String,
+        residueFormula: String
+    ) {
+        self.name = name
+        self.residueFormula = residueFormula
+    }
 
-init(
-    name: String,
-    residueFormula: String
-) {
-    self.name = name
-    self.residueFormula = residueFormula
+    static let glycine = PeptideResidue(
+        name: "Gly",
+        residueFormula: "–CH₂–"
+    )
 }
-
-static let glycine = PeptideResidue(
-    name: "Gly",
-    residueFormula: "–CH₂–"
-)
-
-}
-
 // MARK: - Bond Formation Result
 
 struct BondEvaluation {
 
-let formed: Bool
-let failureReason: String?
-
+    let formed: Bool
+    let failureReason: String?
 }
-
 // MARK: - Peptide Bond Diagnostic
 
 struct PeptideBondDiagnostic: Identifiable {
 
-let id = UUID()
+    let id = UUID()
 
-let bondNumber: Int
+    let bondNumber: Int
+    let firstResidue: String
+    let secondResidue: String
 
-let firstResidue: String
-let secondResidue: String
+    // Cellular-automaton energy transport
+    let initialEnergy: Double
+    let finalEnergy: Double
+    let transportedEnergy: Double
 
-// Cellular-automaton energy transport
-let initialEnergy: Double
-let finalEnergy: Double
-let transportedEnergy: Double
+    // Local QRTL state
+    let localEnergyDensity: Double
+    let qrtlField: Double
+    let coherence: Double
+    let phaseDifference: Double
 
-// Local QRTL state
-let localEnergyDensity: Double
-let qrtlField: Double
-let coherence: Double
-let phaseDifference: Double
+    // QRTL pressure
+    let pressureA: Double
+    let pressureB: Double
+    let deltaPressure: Double
 
-// QRTL pressure
-let pressureA: Double
-let pressureB: Double
-let deltaPressure: Double
+    // Bond condition
+    let bondEnergy: Double
 
-// Bond condition
-let bondEnergy: Double
-
-// Final result
-let formed: Bool
-let failureReason: String?
-
+    // Final result
+    let formed: Bool
+    let failureReason: String?
 }
-
 // MARK: - Molecular Stage Diagnostic
 
 struct MolecularStageDiagnostic: Identifiable {
 
-let id = UUID()
+    let id = UUID()
 
-let stage: MolecularAssemblyStage
-let status: String
-
-let details: [String: String]
-
-let passed: Bool
-
+    let stage: MolecularAssemblyStage
+    let status: String
+    let details: [String: String]
+    let passed: Bool
 }
-
 // MARK: - QRTL Bond Evaluation
 
 func evaluateQRTLBondFormation(
-deltaPressure: Double,
-allowableDeltaPressure: Double,
-
-bondEnergy: Double,
-minimumBondEnergy: Double,
-
-coherence: Double,
-minimumCoherence: Double,
-
-phaseDifference: Double,
-maximumPhaseDifference: Double
-
+    deltaPressure: Double,
+    allowableDeltaPressure: Double,
+    bondEnergy: Double,
+    minimumBondEnergy: Double,
+    coherence: Double,
+    minimumCoherence: Double,
+    phaseDifference: Double,
+    maximumPhaseDifference: Double
 ) -> BondEvaluation {
 
-// ---------------------------------------------------------
-// 1. ΔP gate
-// ---------------------------------------------------------
+    // ---------------------------------------------------------
+    // 1. ΔP gate
+    // ---------------------------------------------------------
 
-guard abs(deltaPressure) <= allowableDeltaPressure else {
+    guard abs(deltaPressure) <= allowableDeltaPressure else {
+        return BondEvaluation(
+            formed: false,
+            failureReason:
+                "ΔP is outside the allowable bond-formation range."
+        )
+    }
+
+    // ---------------------------------------------------------
+    // 2. Local bond-energy gate
+    // ---------------------------------------------------------
+
+    guard bondEnergy >= minimumBondEnergy else {
+        return BondEvaluation(
+            formed: false,
+            failureReason:
+                "Local bond energy is below the configured threshold."
+        )
+    }
+
+    // ---------------------------------------------------------
+    // 3. Coherence gate
+    // ---------------------------------------------------------
+
+    guard coherence >= minimumCoherence else {
+        return BondEvaluation(
+            formed: false,
+            failureReason:
+                "QRTL coherence is below the configured threshold."
+        )
+    }
+
+    // ---------------------------------------------------------
+    // 4. Phase gate
+    // ---------------------------------------------------------
+
+    guard abs(phaseDifference) <= maximumPhaseDifference else {
+        return BondEvaluation(
+            formed: false,
+            failureReason:
+                "Phase difference exceeds the configured tolerance."
+        )
+    }
 
     return BondEvaluation(
-        formed: false,
-        failureReason:
-            "ΔP is outside the allowable bond-formation range."
+        formed: true,
+        failureReason: nil
     )
-}
-
-// ---------------------------------------------------------
-// 2. Local bond-energy gate
-// ---------------------------------------------------------
-
-guard bondEnergy >= minimumBondEnergy else {
-
-    return BondEvaluation(
-        formed: false,
-        failureReason:
-            "Local bond energy is below the configured threshold."
-    )
-}
-
-// ---------------------------------------------------------
-// 3. Coherence gate
-// ---------------------------------------------------------
-
-guard coherence >= minimumCoherence else {
-
-    return BondEvaluation(
-        formed: false,
-        failureReason:
-            "QRTL coherence is below the configured threshold."
-    )
-}
-
-// ---------------------------------------------------------
-// 4. Phase gate
-// ---------------------------------------------------------
-
-guard abs(phaseDifference) <= maximumPhaseDifference else {
-
-    return BondEvaluation(
-        formed: false,
-        failureReason:
-            "Phase difference exceeds the configured tolerance."
-    )
-}
-
-return BondEvaluation(
-    formed: true,
-    failureReason: nil
-)
-
 }
 
 // MARK: - Molecular Assembly Pipeline
@@ -231,1056 +210,1199 @@ return BondEvaluation(
 @MainActor
 final class MolecularAssemblyPipeline: ObservableObject {
 
-// ---------------------------------------------------------
-// Published state
-// ---------------------------------------------------------
+    // ---------------------------------------------------------
+    // Published state
+    // ---------------------------------------------------------
 
-@Published private(set) var stageDiagnostics:
-    [MolecularStageDiagnostic] = []
+    @Published private(set) var stageDiagnostics:
+        [MolecularStageDiagnostic] = []
 
-@Published private(set) var peptideBondDiagnostics:
-    [PeptideBondDiagnostic] = []
+    @Published private(set) var peptideBondDiagnostics:
+        [PeptideBondDiagnostic] = []
 
-@Published private(set) var currentStage:
-    MolecularAssemblyStage = .peptideBuildingBlocks
+    @Published private(set) var currentStage:
+        MolecularAssemblyStage = .peptideBuildingBlocks
 
-@Published private(set) var finalMolecule:
-    String = ""
+    @Published private(set) var finalMolecule:
+        String = ""
 
-@Published private(set) var isPeptide:
-    Bool = false
+    @Published private(set) var isPeptide:
+        Bool = false
 
-@Published private(set) var status:
-    String = "Not Started"
+    @Published private(set) var status:
+        String = "Not Started"
 
-// ---------------------------------------------------------
-// Bond-formation thresholds
-//
-// These are explicit MODEL thresholds.
-// They are not experimental constants.
-// ---------------------------------------------------------
-
-var allowableDeltaPressure: Double = 0.50
-
-var minimumBondEnergy: Double = 0.10
-
-var minimumCoherence: Double = 0.70
-
-var maximumPhaseDifference: Double = .pi / 4
-
-// ---------------------------------------------------------
-// Initialization
-// ---------------------------------------------------------
-
-init() {
-
-    buildStageDiagnostics()
-}
-
-// MARK: Reset
-
-func reset() {
-
-    stageDiagnostics.removeAll()
-
-    peptideBondDiagnostics.removeAll()
-
-    currentStage = .peptideBuildingBlocks
-
-    finalMolecule = ""
-
-    isPeptide = false
-
-    status = "Not Started"
-
-    buildStageDiagnostics()
-}
-
-// MARK: Complete Gly4 Diagnostic
-
-/// Runs the complete diagnostic pipeline for:
-///
-/// Gly–Gly–Gly–Gly
-///
-/// The CA implementation remains external to this pipeline.
-/// ContentView / PeptideSimulationEngine supplies the callbacks
-/// for energy transport and QRTL calculations.
-func runGly4Diagnostic(
-
-    transportEnergy:
-        @escaping () -> (
-            initial: Double,
-            final: Double
-        ),
-
-    localEnergyDensity:
-        @escaping (Int) -> Double,
-
-    qrtlField:
-        @escaping (Int) -> Double,
-
-    coherence:
-        @escaping (Int) -> Double,
-
-    phaseDifference:
-        @escaping (Int) -> Double,
-
-    pressure:
-        @escaping (
-            Int,
-            Int
-        ) -> Double,
-
-    createBond:
-        @escaping (Int) -> Void
-) {
-
-    reset()
-
-    status = "Running"
-
-    currentStage =
-        .peptideBuildingBlocks
-
-    // -----------------------------------------------------
-    // STAGE 1
-    // Building blocks
-    // -----------------------------------------------------
-
-    let residues =
-        Array(
-            repeating: PeptideResidue.glycine,
-            count: 4
-        )
-
-    // -----------------------------------------------------
-    // CELLULAR AUTOMATON
+    // ---------------------------------------------------------
+    // Bond-formation thresholds
     //
-    // The CA transports / redistributes the supplied energy.
-    // -----------------------------------------------------
+    // These are explicit MODEL thresholds.
+    // They are not experimental constants.
+    // ---------------------------------------------------------
 
-    let energy = transportEnergy()
+    var allowableDeltaPressure: Double = 0.50
+    var minimumBondEnergy: Double = 0.10
+    var minimumCoherence: Double = 0.70
+    var maximumPhaseDifference: Double = .pi / 4
 
-    let initialEnergy =
-        energy.initial
+    // ---------------------------------------------------------
+    // Initialization
+    // ---------------------------------------------------------
 
-    let finalEnergy =
-        energy.final
-
-    let transportedEnergy =
-        abs(finalEnergy - initialEnergy)
-
-    // Energy must be available to continue the diagnostic.
-    guard transportedEnergy >= 0 else {
-
-        status =
-            "Cellular-automaton energy transport failed"
-
-        return
+    init() {
+        buildStageDiagnostics()
     }
 
-    // -----------------------------------------------------
-    // THREE PEPTIDE BONDS
-    // -----------------------------------------------------
+    // MARK: Reset
 
-    for bondIndex in 0..<3 {
+    func reset() {
+
+        stageDiagnostics.removeAll()
+        peptideBondDiagnostics.removeAll()
 
         currentStage =
             .peptideBuildingBlocks
 
-        // -------------------------------------------------
-        // Local QRTL energy density
-        // -------------------------------------------------
+        finalMolecule = ""
 
-        let density =
-            localEnergyDensity(
-                bondIndex
-            )
+        isPeptide = false
 
-        // -------------------------------------------------
-        // QRTL field
-        // -------------------------------------------------
+        status = "Not Started"
 
-        let field =
-            qrtlField(
-                bondIndex
-            )
+        buildStageDiagnostics()
+    }
 
-        // -------------------------------------------------
-        // Coherence
-        // -------------------------------------------------
+    // MARK: - Run Gly4
 
-        let bondCoherence =
-            coherence(
-                bondIndex
-            )
+    /*
+     Runs the Gly4 diagnostic.
 
-        // -------------------------------------------------
-        // Phase difference
-        // -------------------------------------------------
+     The actual QRTL / cellular-automaton state is supplied
+     through these closures by the object that owns the
+     physical/model simulation.
 
-        let phase =
-            phaseDifference(
-                bondIndex
-            )
+     This class therefore does NOT assume a variable named
+     `cells` exists.
+     */
 
-        // -------------------------------------------------
-        // QRTL pressure on each side of the bond
-        //
-        // side = -1 → left
-        // side = +1 → right
-        // -------------------------------------------------
+    func runGly4(
+        transportEnergy:
+            @escaping () -> (
+                initial: Double,
+                final: Double
+            ),
 
-        let pressureA =
-            pressure(
-                bondIndex,
-                -1
-            )
+        localEnergyDensity:
+            @escaping (Int) -> Double,
 
-        let pressureB =
-            pressure(
-                bondIndex,
-                1
-            )
+        qrtlField:
+            @escaping (Int) -> Double,
 
-        // -------------------------------------------------
-        // Pressure difference
-        // -------------------------------------------------
+        coherence:
+            @escaping (Int) -> Double,
 
-        let deltaP =
-            pressureA - pressureB
+        phaseDifference:
+            @escaping (Int) -> Double,
 
-        // -------------------------------------------------
-        // Model bond-energy calculation
-        // -------------------------------------------------
+        pressure:
+            @escaping (Int, Int) -> Double,
 
-        let bondEnergy =
-            density *
-            field *
-            bondCoherence *
-            max(
-                0,
-                cos(phase)
-            )
+        createBond:
+            @escaping (Int) -> Void
+    ) {
 
-        // -------------------------------------------------
-        // Bond formation gate
-        // -------------------------------------------------
+        runGly4Diagnostic(
+            transportEnergy:
+                transportEnergy,
 
-        let evaluation =
-            evaluateQRTLBondFormation(
+            localEnergyDensity:
+                localEnergyDensity,
 
-                deltaPressure:
-                    deltaP,
+            qrtlField:
+                qrtlField,
 
-                allowableDeltaPressure:
-                    allowableDeltaPressure,
+            coherence:
+                coherence,
 
-                bondEnergy:
-                    bondEnergy,
+            phaseDifference:
+                phaseDifference,
 
-                minimumBondEnergy:
-                    minimumBondEnergy,
+            pressure:
+                pressure,
 
-                coherence:
-                    bondCoherence,
-
-                minimumCoherence:
-                    minimumCoherence,
-
-                phaseDifference:
-                    phase,
-
-                maximumPhaseDifference:
-                    maximumPhaseDifference
-            )
-
-        // -------------------------------------------------
-        // Create diagnostic card data
-        // -------------------------------------------------
-
-        let diagnostic =
-            PeptideBondDiagnostic(
-
-                bondNumber:
-                    bondIndex + 1,
-
-                firstResidue:
-                    residues[bondIndex].name,
-
-                secondResidue:
-                    residues[bondIndex + 1].name,
-
-                initialEnergy:
-                    initialEnergy,
-
-                finalEnergy:
-                    finalEnergy,
-
-                transportedEnergy:
-                    transportedEnergy,
-
-                localEnergyDensity:
-                    density,
-
-                qrtlField:
-                    field,
-
-                coherence:
-                    bondCoherence,
-
-                phaseDifference:
-                    phase,
-
-                pressureA:
-                    pressureA,
-
-                pressureB:
-                    pressureB,
-
-                deltaPressure:
-                    deltaP,
-
-                bondEnergy:
-                    bondEnergy,
-
-                formed:
-                    evaluation.formed,
-
-                failureReason:
-                    evaluation.failureReason
-            )
-
-        peptideBondDiagnostics.append(
-            diagnostic
+            createBond:
+                createBond
         )
+    }
 
-        // -------------------------------------------------
-        // BLOCKED BOND
-        // -------------------------------------------------
+    // MARK: - Gly4 Diagnostic
 
-        guard evaluation.formed else {
+    /*
+     This function runs the full Gly4 peptide bond formation diagnostic.
+
+     It resets diagnostics upon entry and appends a diagnostic record for
+     every peptide bond attempt, whether formed or blocked.
+
+     If you require per-bond or per-stage diagnostics without resetting or full rerun,
+     consider implementing a non-resetting version or a static utility method.
+
+     This function currently handles all three bonds together, appending diagnostics
+     for each bond attempt within the loop.
+    */
+    func runGly4Diagnostic(
+        transportEnergy:
+            @escaping () -> (
+                initial: Double,
+                final: Double
+            ),
+
+        localEnergyDensity:
+            @escaping (Int) -> Double,
+
+        qrtlField:
+            @escaping (Int) -> Double,
+
+        coherence:
+            @escaping (Int) -> Double,
+
+        phaseDifference:
+            @escaping (Int) -> Double,
+
+        pressure:
+            @escaping (Int, Int) -> Double,
+
+        createBond:
+            @escaping (Int) -> Void
+    ) {
+
+        reset()
+
+        status = "Running"
+
+        currentStage =
+            .peptideBuildingBlocks
+
+        // -----------------------------------------------------
+        // STAGE 1
+        // Building blocks
+        // -----------------------------------------------------
+
+        let residues =
+            Array(
+                repeating:
+                    PeptideResidue.glycine,
+                count: 4
+            )
+
+        // -----------------------------------------------------
+        // CELLULAR AUTOMATON
+        //
+        // The CA transports / redistributes energy.
+        //
+        // IMPORTANT:
+        //
+        // finalEnergy represents the energy available after
+        // the supplied CA transport calculation.
+        //
+        // The previous implementation used:
+        //
+        // abs(finalEnergy - initialEnergy)
+        //
+        // as "transported energy".
+        //
+        // That can be zero even when the CA has redistributed
+        // energy while conserving total energy.
+        // -----------------------------------------------------
+
+        let energy =
+            transportEnergy()
+
+        let initialEnergy =
+            energy.initial
+
+        let finalEnergy =
+            energy.final
+
+        // Net change is diagnostic information.
+        let netEnergyChange =
+            finalEnergy - initialEnergy
+
+        // Energy available to molecular assembly.
+        let availableEnergy =
+            max(
+                0.0,
+                finalEnergy
+            )
+
+        // -----------------------------------------------------
+        // ENERGY VALIDATION
+        // -----------------------------------------------------
+
+        guard
+            initialEnergy.isFinite,
+            finalEnergy.isFinite,
+            availableEnergy > 0.0
+        else {
 
             status =
-                "BLOCKED at peptide bond \(bondIndex + 1)"
-
-            finalMolecule =
-                residues
-                    .prefix(bondIndex + 1)
-                    .map { $0.name }
-                    .joined(
-                        separator: "–"
-                    )
-
-            isPeptide =
-                peptideBondDiagnostics
-                    .contains {
-                        $0.formed
-                    }
+                "No usable cellular-automaton energy reached molecular assembly"
 
             buildStageDiagnostics()
 
             return
         }
 
-        // -------------------------------------------------
-        // FORM ACTUAL MOLECULAR CONNECTION
-        // -------------------------------------------------
+        // -----------------------------------------------------
+        // THREE PEPTIDE BONDS
+        //
+        // Gly4 requires:
+        //
+        // Gly–Gly
+        // Gly–Gly
+        // Gly–Gly
+        //
+        // = 3 peptide bonds
+        // -----------------------------------------------------
 
-        createBond(
-            bondIndex
-        )
+        for bondIndex in 0..<3 {
+
+            currentStage =
+                .peptideBuildingBlocks
+
+            // -------------------------------------------------
+            // Local QRTL energy density
+            // -------------------------------------------------
+
+            let density =
+                max(
+                    0.0,
+                    localEnergyDensity(
+                        bondIndex
+                    )
+                )
+
+            // -------------------------------------------------
+            // QRTL field
+            // -------------------------------------------------
+
+            let field =
+                max(
+                    0.0,
+                    qrtlField(
+                        bondIndex
+                    )
+                )
+
+            // -------------------------------------------------
+            // Coherence
+            // -------------------------------------------------
+
+            let bondCoherence =
+                max(
+                    0.0,
+                    min(
+                        1.0,
+                        coherence(
+                            bondIndex
+                        )
+                    )
+                )
+
+            // -------------------------------------------------
+            // Phase difference
+            // -------------------------------------------------
+
+            let phase =
+                phaseDifference(
+                    bondIndex
+                )
+
+            // -------------------------------------------------
+            // QRTL pressure on each side of the bond
+            //
+            // side = -1 → left
+            // side = +1 → right
+            // -------------------------------------------------
+
+            let pressureA =
+                pressure(
+                    bondIndex,
+                    -1
+                )
+
+            let pressureB =
+                pressure(
+                    bondIndex,
+                    1
+                )
+
+            // -------------------------------------------------
+            // Pressure difference
+            // -------------------------------------------------
+
+            let deltaP =
+                pressureA - pressureB
+
+            // -------------------------------------------------
+            // Phase alignment
+            // -------------------------------------------------
+
+            let phaseAlignment =
+                max(
+                    0.0,
+                    cos(phase)
+                )
+
+            // -------------------------------------------------
+            // BOND ENERGY
+            //
+            // CA available energy
+            // × local QRTL density
+            // × QRTL field
+            // × coherence
+            // × phase alignment
+            // -------------------------------------------------
+
+            let bondEnergy =
+                availableEnergy *
+                density *
+                field *
+                bondCoherence *
+                phaseAlignment
+
+            // -------------------------------------------------
+            // BOND 1 DEBUG TRACE
+            //
+            // This executes only for Bond 1.
+            // It identifies where the energy is becoming zero
+            // or falling below the bond threshold.
+            // -------------------------------------------------
+
+            if bondIndex == 0 {
+
+                print("""
+                ==============================
+                BOND 1 ENERGY TRACE
+                ==============================
+                initialEnergy       = \(initialEnergy)
+                finalEnergy         = \(finalEnergy)
+                netEnergyChange     = \(netEnergyChange)
+                availableEnergy     = \(availableEnergy)
+
+                density             = \(density)
+                field               = \(field)
+                coherence           = \(bondCoherence)
+                phase               = \(phase)
+                cos(phase)          = \(cos(phase))
+                phaseAlignment      = \(phaseAlignment)
+
+                pressureA           = \(pressureA)
+                pressureB           = \(pressureB)
+                deltaPressure       = \(deltaP)
+
+                bondEnergy          = \(bondEnergy)
+                minimumBondEnergy   = \(minimumBondEnergy)
+                minimumCoherence    = \(minimumCoherence)
+                allowableDeltaP     = \(allowableDeltaPressure)
+                maximumPhaseDiff    = \(maximumPhaseDifference)
+                ==============================
+                """)
+            }
+
+            // -------------------------------------------------
+            // BOND FORMATION GATE
+            // -------------------------------------------------
+
+            let evaluation =
+                evaluateQRTLBondFormation(
+                    deltaPressure:
+                        deltaP,
+
+                    allowableDeltaPressure:
+                        allowableDeltaPressure,
+
+                    bondEnergy:
+                        bondEnergy,
+
+                    minimumBondEnergy:
+                        minimumBondEnergy,
+
+                    coherence:
+                        bondCoherence,
+
+                    minimumCoherence:
+                        minimumCoherence,
+
+                    phaseDifference:
+                        phase,
+
+                    maximumPhaseDifference:
+                        maximumPhaseDifference
+                )
+
+            // -------------------------------------------------
+            // CREATE DIAGNOSTIC CARD DATA
+            // -------------------------------------------------
+
+            let diagnostic =
+                PeptideBondDiagnostic(
+
+                    bondNumber:
+                        bondIndex + 1,
+
+                    firstResidue:
+                        residues[bondIndex].name,
+
+                    secondResidue:
+                        residues[bondIndex + 1].name,
+
+                    initialEnergy:
+                        initialEnergy,
+
+                    finalEnergy:
+                        finalEnergy,
+
+                    transportedEnergy:
+                        availableEnergy,
+
+                    localEnergyDensity:
+                        density,
+
+                    qrtlField:
+                        field,
+
+                    coherence:
+                        bondCoherence,
+
+                    phaseDifference:
+                        phase,
+
+                    pressureA:
+                        pressureA,
+
+                    pressureB:
+                        pressureB,
+
+                    deltaPressure:
+                        deltaP,
+
+                    bondEnergy:
+                        bondEnergy,
+
+                    formed:
+                        evaluation.formed,
+
+                    failureReason:
+                        evaluation.failureReason
+                )
+
+            // Record a diagnostic for every bond attempt (success or failure)
+            peptideBondDiagnostics.append(
+                diagnostic
+            )
+
+            // -------------------------------------------------
+            // BLOCKED BOND
+            // -------------------------------------------------
+
+            guard evaluation.formed else {
+
+                status =
+                    "BLOCKED at peptide bond \(bondIndex + 1)"
+
+                finalMolecule =
+                    residues
+                        .prefix(bondIndex + 1)
+                        .map {
+                            $0.name
+                        }
+                        .joined(
+                            separator: "–"
+                        )
+
+                isPeptide =
+                    peptideBondDiagnostics.count == 3 &&
+                    peptideBondDiagnostics.allSatisfy {
+                        $0.formed
+                    }
+
+                buildStageDiagnostics()
+
+                return
+            }
+
+            // -------------------------------------------------
+            // FORM ACTUAL MOLECULAR CONNECTION
+            // -------------------------------------------------
+
+            createBond(
+                bondIndex
+            )
+        }
+
+        // -----------------------------------------------------
+        // ALL THREE BONDS FORMED
+        // -----------------------------------------------------
+
+        currentStage =
+            .specialtyCompound
+
+        finalMolecule =
+            "NH₂–CH₂–CO–NH–CH₂–CO–NH–CH₂–CO–NH–CH₂–COOH"
+
+        isPeptide =
+            peptideBondDiagnostics.count == 3 &&
+            peptideBondDiagnostics.allSatisfy {
+                $0.formed
+            }
+
+        status =
+            isPeptide
+            ? "Complete: Gly–Gly–Gly–Gly tetrapeptide"
+            : "Incomplete"
+
+        buildStageDiagnostics()
     }
 
-    // -----------------------------------------------------
-    // ALL THREE BONDS FORMED
-    // -----------------------------------------------------
+    // MARK: - Stage Diagnostics
 
-    currentStage =
-        .specialtyCompound
+    private func buildStageDiagnostics() {
 
-    finalMolecule =
-        "NH₂–CH₂–CO–NH–CH₂–CO–NH–CH₂–CO–NH–CH₂–COOH"
+        let peptideComplete =
+            peptideBondDiagnostics.count == 3 &&
+            peptideBondDiagnostics.allSatisfy {
+                $0.formed
+            }
 
-    isPeptide =
-        peptideBondDiagnostics.count == 3 &&
-        peptideBondDiagnostics.allSatisfy {
-            $0.formed
-        }
+        stageDiagnostics = [
 
-    status =
-        isPeptide
-        ? "Complete: Gly–Gly–Gly–Gly tetrapeptide"
-        : "Incomplete"
+            // -------------------------------------------------
+            // 1. Peptide Building Blocks
+            // -------------------------------------------------
 
-    buildStageDiagnostics()
-}
+            MolecularStageDiagnostic(
+                stage:
+                    .peptideBuildingBlocks,
 
-// MARK: Stage Diagnostics
+                status:
+                    "READY",
 
-private func buildStageDiagnostics() {
+                details: [
+                    "Target":
+                        "Gly–Gly–Gly–Gly",
 
-    let peptideComplete =
-        peptideBondDiagnostics.count == 3 &&
-        peptideBondDiagnostics.allSatisfy {
-            $0.formed
-        }
+                    "Building block":
+                        "H₂N–CH₂–COOH",
 
-    stageDiagnostics = [
+                    "Building blocks":
+                        "4 glycine residues",
 
-        // -------------------------------------------------
-        // 1
-        // -------------------------------------------------
+                    "Peptide bonds required":
+                        "3",
 
-        MolecularStageDiagnostic(
+                    "Sequence":
+                        "Gly–Gly–Gly–Gly"
+                ],
 
-            stage:
-                .peptideBuildingBlocks,
+                passed:
+                    true
+            ),
 
-            status:
-                "READY",
+            // -------------------------------------------------
+            // 2. Drug Intermediate
+            // -------------------------------------------------
 
-            details: [
+            MolecularStageDiagnostic(
+                stage:
+                    .drugIntermediate,
 
-                "Target":
-                    "Gly–Gly–Gly–Gly",
+                status:
+                    "CHECKPOINT",
 
-                "Building block":
-                    "H₂N–CH₂–COOH",
+                details: [
+                    "Role":
+                        "General molecular-assembly checkpoint",
 
-                "Building blocks":
-                    "4 glycine residues",
+                    "Gly₄ relevance":
+                        "Not required for the peptide test"
+                ],
 
-                "Peptide bonds required":
-                    "3",
+                passed:
+                    true
+            ),
 
-                "Sequence":
-                    "Gly–Gly–Gly–Gly"
-            ],
+            // -------------------------------------------------
+            // 3. API
+            // -------------------------------------------------
 
-            passed:
-                true
-        ),
+            MolecularStageDiagnostic(
+                stage:
+                    .api,
 
-        // -------------------------------------------------
-        // 2
-        // -------------------------------------------------
+                status:
+                    "CHECKPOINT",
 
-        MolecularStageDiagnostic(
+                details: [
+                    "Role":
+                        "API classification checkpoint",
 
-            stage:
-                .drugIntermediate,
+                    "Gly₄ result":
+                        "Not an API by this test"
+                ],
 
-            status:
-                "CHECKPOINT",
+                passed:
+                    true
+            ),
 
-            details: [
+            // -------------------------------------------------
+            // 4. Nucleotide
+            // -------------------------------------------------
 
-                "Role":
-                    "General molecular-assembly checkpoint",
+            MolecularStageDiagnostic(
+                stage:
+                    .nucleotide,
 
-                "Gly₄ relevance":
-                    "Not required for the peptide test"
-            ],
+                status:
+                    "NOT APPLICABLE",
 
-            passed:
-                true
-        ),
+                details: [
+                    "Target":
+                        "Peptide",
 
-        // -------------------------------------------------
-        // 3
-        // -------------------------------------------------
+                    "Nucleotide structure":
+                        "Not required"
+                ],
 
-        MolecularStageDiagnostic(
+                passed:
+                    true
+            ),
 
-            stage:
-                .api,
+            // -------------------------------------------------
+            // 5. Oligonucleotide
+            // -------------------------------------------------
 
-            status:
-                "CHECKPOINT",
+            MolecularStageDiagnostic(
+                stage:
+                    .oligonucleotide,
 
-            details: [
+                status:
+                    "NOT APPLICABLE",
 
-                "Role":
-                    "API classification checkpoint",
+                details: [
+                    "Target":
+                        "Peptide",
 
-                "Gly₄ result":
-                    "Not an API by this test"
-            ],
+                    "Nucleotide sequence":
+                        "Not required"
+                ],
 
-            passed:
-                true
-        ),
+                passed:
+                    true
+            ),
 
-        // -------------------------------------------------
-        // 4
-        // -------------------------------------------------
+            // -------------------------------------------------
+            // 6. Heterocycle
+            // -------------------------------------------------
 
-        MolecularStageDiagnostic(
+            MolecularStageDiagnostic(
+                stage:
+                    .heterocycle,
 
-            stage:
-                .nucleotide,
+                status:
+                    "NOT APPLICABLE",
 
-            status:
-                "NOT APPLICABLE",
+                details: [
+                    "Target":
+                        "Gly₄",
 
-            details: [
+                    "Required ring":
+                        "None"
+                ],
 
-                "Target":
-                    "Peptide",
+                passed:
+                    true
+            ),
 
-                "Nucleotide structure":
-                    "Not required"
-            ],
+            // -------------------------------------------------
+            // 7. Chirality
+            // -------------------------------------------------
 
-            passed:
-                true
-        ),
+            MolecularStageDiagnostic(
+                stage:
+                    .chirality,
 
-        // -------------------------------------------------
-        // 5
-        // -------------------------------------------------
+                status:
+                    "CHECKED",
 
-        MolecularStageDiagnostic(
+                details: [
+                    "Residue":
+                        "Glycine",
 
-            stage:
-                .oligonucleotide,
+                    "Alpha-carbon chirality":
+                        "Achiral",
 
-            status:
-                "NOT APPLICABLE",
+                    "Stereochemical ambiguity":
+                        "None at the glycine alpha carbon"
+                ],
 
-            details: [
+                passed:
+                    true
+            ),
 
-                "Target":
-                    "Peptide",
+            // -------------------------------------------------
+            // 8. Specialty Compound
+            // -------------------------------------------------
 
-                "Nucleotide sequence":
-                    "Not required"
-            ],
+            MolecularStageDiagnostic(
+                stage:
+                    .specialtyCompound,
 
-            passed:
-                true
-        ),
-
-        // -------------------------------------------------
-        // 6
-        // -------------------------------------------------
-
-        MolecularStageDiagnostic(
-
-            stage:
-                .heterocycle,
-
-            status:
-                "NOT APPLICABLE",
-
-            details: [
-
-                "Target":
-                    "Gly₄",
-
-                "Required ring":
-                    "None"
-            ],
-
-            passed:
-                true
-        ),
-
-        // -------------------------------------------------
-        // 7
-        // -------------------------------------------------
-
-        MolecularStageDiagnostic(
-
-            stage:
-                .chirality,
-
-            status:
-                "CHECKED",
-
-            details: [
-
-                "Residue":
-                    "Glycine",
-
-                "Alpha-carbon chirality":
-                    "Achiral",
-
-                "Stereochemical ambiguity":
-                    "None at the glycine alpha carbon"
-            ],
-
-            passed:
-                true
-        ),
-
-        // -------------------------------------------------
-        // 8
-        // -------------------------------------------------
-
-        MolecularStageDiagnostic(
-
-            stage:
-                .specialtyCompound,
-
-            status:
-                peptideComplete
-                ? "COMPLETE"
-                : "INCOMPLETE",
-
-            details: [
-
-                "Final structure":
+                status:
                     peptideComplete
-                    ? finalMolecule
-                    : (
-                        finalMolecule.isEmpty
-                        ? "Not completed"
-                        : finalMolecule
-                    ),
+                    ? "COMPLETE"
+                    : "INCOMPLETE",
 
-                "Classification":
+                details: [
+
+                    "Final structure":
+                        peptideComplete
+                        ? finalMolecule
+                        : (
+                            finalMolecule.isEmpty
+                            ? "Not completed"
+                            : finalMolecule
+                        ),
+
+                    "Classification":
+                        peptideComplete
+                        ? "Tetrapeptide"
+                        : "Incomplete peptide chain",
+
+                    "Peptide bonds formed":
+                        "\(peptideBondDiagnostics.filter { $0.formed }.count) / 3",
+
+                    "Experimental validation":
+                        "Not established by this simulation"
+                ],
+
+                passed:
                     peptideComplete
-                    ? "Tetrapeptide"
-                    : "Incomplete peptide chain",
-
-                "Peptide bonds formed":
-                    "\(peptideBondDiagnostics.filter { $0.formed }.count) / 3",
-
-                "Experimental validation":
-                    "Not established by this simulation"
-            ],
-
-            passed:
-                peptideComplete
-        )
-    ]
+            )
+        ]
+    }
 }
-
-}
-
 // MARK: - Diagnostic Card
 
 struct MolecularAssemblyDiagnosticCard: View {
 
-let diagnostic:
-    MolecularStageDiagnostic
+    let diagnostic:
+        MolecularStageDiagnostic
 
-var body: some View {
+    var body: some View {
 
-    VStack(
-        alignment: .leading,
-        spacing: 8
-    ) {
+        VStack(
+            alignment: .leading,
+            spacing: 8
+        ) {
 
-        HStack {
-
-            Text(
-                "Stage \(diagnostic.stage.rawValue)"
-            )
-            .font(.headline)
-
-            Spacer()
-
-            Text(
-                diagnostic.status
-            )
-            .font(.caption.bold())
-        }
-
-        Text(
-            diagnostic.stage.title
-        )
-        .font(.subheadline)
-
-        Divider()
-
-        ForEach(
-            diagnostic.details.sorted(
-                by: {
-                    $0.key < $1.key
-                }
-            ),
-            id: \.key
-        ) { item in
-
-            HStack(
-                alignment: .top
-            ) {
+            HStack {
 
                 Text(
-                    item.key
+                    "Stage \(diagnostic.stage.rawValue)"
+                )
+                .font(.headline)
+
+                Spacer()
+
+                Text(
+                    diagnostic.status
+                )
+                .font(.caption.bold())
+            }
+
+            Text(
+                diagnostic.stage.title
+            )
+            .font(.subheadline)
+
+            Divider()
+
+            ForEach(
+                diagnostic.details.sorted(
+                    by: {
+                        $0.key < $1.key
+                    }
+                ),
+                id: \.key
+            ) { item in
+
+                HStack(
+                    alignment: .top
+                ) {
+
+                    Text(
+                        item.key
+                    )
+
+                    Spacer()
+
+                    Text(
+                        item.value
+                    )
+                    .multilineTextAlignment(
+                        .trailing
+                    )
+                }
+                .font(.caption)
+            }
+
+            Divider()
+
+            Text(
+                diagnostic.passed
+                ? "STATUS: PASS"
+                : "STATUS: BLOCKED"
+            )
+            .font(.headline)
+        }
+        .padding()
+        .background(
+            .regularMaterial
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 12
+            )
+        )
+    }
+}
+// MARK: - Peptide Bond Diagnostic Card
+
+struct PeptideBondDiagnosticCard: View {
+
+    let diagnostic:
+        PeptideBondDiagnostic
+
+    private func format(
+        _ value: Double
+    ) -> String {
+
+        String(
+            format: "%.6g",
+            value
+        )
+    }
+
+    var body: some View {
+
+        VStack(
+            alignment: .leading,
+            spacing: 8
+        ) {
+
+            // -------------------------------------------------
+            // Header
+            // -------------------------------------------------
+
+            HStack {
+
+                Text(
+                    "Peptide Bond \(diagnostic.bondNumber)"
+                )
+                .font(.headline)
+
+                Spacer()
+
+                Text(
+                    diagnostic.formed
+                    ? "FORMED"
+                    : "BLOCKED"
+                )
+                .fontWeight(.bold)
+            }
+
+            Text(
+                "\(diagnostic.firstResidue) → \(diagnostic.secondResidue)"
+            )
+            .font(.subheadline)
+
+            Divider()
+
+            // -------------------------------------------------
+            // CA transport
+            // -------------------------------------------------
+
+            Text(
+                "CELLULAR AUTOMATON"
+            )
+            .font(.caption.bold())
+
+            diagnosticRow(
+                "Initial energy",
+                format(
+                    diagnostic.initialEnergy
+                )
+            )
+
+            diagnosticRow(
+                "Final energy",
+                format(
+                    diagnostic.finalEnergy
+                )
+            )
+
+            diagnosticRow(
+                "Transported / redistributed energy",
+                format(
+                    diagnostic.transportedEnergy
+                )
+            )
+
+            Divider()
+
+            // -------------------------------------------------
+            // Local QRTL state
+            // -------------------------------------------------
+
+            Text(
+                "LOCAL QRTL STATE"
+            )
+            .font(.caption.bold())
+
+            diagnosticRow(
+                "Energy density",
+                format(
+                    diagnostic.localEnergyDensity
+                )
+            )
+
+            diagnosticRow(
+                "QRTL field",
+                format(
+                    diagnostic.qrtlField
+                )
+            )
+
+            diagnosticRow(
+                "Coherence",
+                format(
+                    diagnostic.coherence
+                )
+            )
+
+            diagnosticRow(
+                "Phase difference",
+                format(
+                    diagnostic.phaseDifference
+                )
+            )
+
+            Divider()
+
+            // -------------------------------------------------
+            // Pressure
+            // -------------------------------------------------
+
+            Text(
+                "QRTL PRESSURE"
+            )
+            .font(.caption.bold())
+
+            diagnosticRow(
+                "Pressure A",
+                format(
+                    diagnostic.pressureA
+                )
+            )
+
+            diagnosticRow(
+                "Pressure B",
+                format(
+                    diagnostic.pressureB
+                )
+            )
+
+            diagnosticRow(
+                "ΔP",
+                format(
+                    diagnostic.deltaPressure
+                )
+            )
+
+            Divider()
+
+            // -------------------------------------------------
+            // Bond result
+            // -------------------------------------------------
+
+            Text(
+                "BOND-FORMATION TEST"
+            )
+            .font(.caption.bold())
+
+            diagnosticRow(
+                "Bond energy",
+                format(
+                    diagnostic.bondEnergy
+                )
+            )
+
+            HStack {
+
+                Text(
+                    "Result"
                 )
 
                 Spacer()
 
                 Text(
-                    item.value
+                    diagnostic.formed
+                    ? "PEPTIDE BOND FORMED"
+                    : "PEPTIDE BOND BLOCKED"
                 )
-                .multilineTextAlignment(
-                    .trailing
-                )
+                .fontWeight(.bold)
             }
-            .font(.caption)
+
+            if let reason =
+                diagnostic.failureReason {
+
+                Text(
+                    reason
+                )
+                .font(.caption)
+            }
         }
-
-        Divider()
-
-        Text(
-            diagnostic.passed
-            ? "STATUS: PASS"
-            : "STATUS: BLOCKED"
+        .padding()
+        .background(
+            .regularMaterial
         )
-        .font(.headline)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 12
+            )
+        )
     }
-    .padding()
-    .background(
-        .regularMaterial
-    )
-    .clipShape(
-        RoundedRectangle(
-            cornerRadius: 12
-        )
-    )
-}
 
-
-}
-
-// MARK: - Peptide Bond Diagnostic Card
-
-struct PeptideBondDiagnosticCard: View {
-
-
-let diagnostic:
-    PeptideBondDiagnostic
-
-private func format(
-    _ value: Double
-) -> String {
-
-    String(
-        format: "%.6g",
-        value
-    )
-}
-
-var body: some View {
-
-    VStack(
-        alignment: .leading,
-        spacing: 8
-    ) {
-
-        // -------------------------------------------------
-        // Header
-        // -------------------------------------------------
+    private func diagnosticRow(
+        _ title: String,
+        _ value: String
+    ) -> some View {
 
         HStack {
 
             Text(
-                "Peptide Bond \(diagnostic.bondNumber)"
-            )
-            .font(.headline)
-
-            Spacer()
-
-            Text(
-                diagnostic.formed
-                ? "FORMED"
-                : "BLOCKED"
-            )
-            .fontWeight(.bold)
-        }
-
-        Text(
-            "\(diagnostic.firstResidue) → \(diagnostic.secondResidue)"
-        )
-        .font(.subheadline)
-
-        Divider()
-
-        // -------------------------------------------------
-        // CA transport
-        // -------------------------------------------------
-
-        Text(
-            "CELLULAR AUTOMATON"
-        )
-        .font(.caption.bold())
-
-        diagnosticRow(
-            "Initial energy",
-            format(
-                diagnostic.initialEnergy
-            )
-        )
-
-        diagnosticRow(
-            "Final energy",
-            format(
-                diagnostic.finalEnergy
-            )
-        )
-
-        diagnosticRow(
-            "Transported / redistributed energy",
-            format(
-                diagnostic.transportedEnergy
-            )
-        )
-
-        Divider()
-
-        // -------------------------------------------------
-        // Local QRTL state
-        // -------------------------------------------------
-
-        Text(
-            "LOCAL QRTL STATE"
-        )
-        .font(.caption.bold())
-
-        diagnosticRow(
-            "Energy density",
-            format(
-                diagnostic.localEnergyDensity
-            )
-        )
-
-        diagnosticRow(
-            "QRTL field",
-            format(
-                diagnostic.qrtlField
-            )
-        )
-
-        diagnosticRow(
-            "Coherence",
-            format(
-                diagnostic.coherence
-            )
-        )
-
-        diagnosticRow(
-            "Phase difference",
-            format(
-                diagnostic.phaseDifference
-            )
-        )
-
-        Divider()
-
-        // -------------------------------------------------
-        // Pressure
-        // -------------------------------------------------
-
-        Text(
-            "QRTL PRESSURE"
-        )
-        .font(.caption.bold())
-
-        diagnosticRow(
-            "Pressure A",
-            format(
-                diagnostic.pressureA
-            )
-        )
-
-        diagnosticRow(
-            "Pressure B",
-            format(
-                diagnostic.pressureB
-            )
-        )
-
-        diagnosticRow(
-            "ΔP",
-            format(
-                diagnostic.deltaPressure
-            )
-        )
-
-        Divider()
-
-        // -------------------------------------------------
-        // Bond result
-        // -------------------------------------------------
-
-        Text(
-            "BOND-FORMATION TEST"
-        )
-        .font(.caption.bold())
-
-        diagnosticRow(
-            "Bond energy",
-            format(
-                diagnostic.bondEnergy
-            )
-        )
-
-        HStack {
-
-            Text(
-                "Result"
+                title
             )
 
             Spacer()
 
             Text(
-                diagnostic.formed
-                ? "PEPTIDE BOND FORMED"
-                : "PEPTIDE BOND BLOCKED"
+                value
             )
-            .fontWeight(.bold)
+            .monospacedDigit()
         }
-
-        if let reason =
-            diagnostic.failureReason {
-
-            Text(
-                reason
-            )
-            .font(.caption)
-        }
+        .font(.caption)
     }
-    .padding()
-    .background(
-        .regularMaterial
-    )
-    .clipShape(
-        RoundedRectangle(
-            cornerRadius: 12
-        )
-    )
 }
-
-private func diagnosticRow(
-    _ title: String,
-    _ value: String
-) -> some View {
-
-    HStack {
-
-        Text(
-            title
-        )
-
-        Spacer()
-
-        Text(
-            value
-        )
-        .monospacedDigit()
-    }
-    .font(.caption)
-}
-
-
-}
-
 // MARK: - Complete Diagnostic View
 
 struct MolecularAssemblyDiagnosticList: View {
 
-@ObservedObject
-var pipeline:
-    MolecularAssemblyPipeline
+    @ObservedObject
+    var pipeline:
+        MolecularAssemblyPipeline
 
-var body: some View {
+    var body: some View {
 
-    ScrollView {
+        ScrollView {
 
-        VStack(
-            alignment: .leading,
-            spacing: 12
-        ) {
+            VStack(
+                alignment: .leading,
+                spacing: 12
+            ) {
 
-            Text(
-                "Molecular Assembly Diagnostics"
-            )
-            .font(.title2.bold())
-
-            Text(
-                pipeline.status
-            )
-            .font(.headline)
-
-            // -------------------------------------------------
-            // Eight molecular-assembly stage cards
-            // -------------------------------------------------
-
-            ForEach(
-                pipeline.stageDiagnostics
-            ) { diagnostic in
-
-                MolecularAssemblyDiagnosticCard(
-                    diagnostic:
-                        diagnostic
+                Text(
+                    "Molecular Assembly Diagnostics"
                 )
-            }
+                .font(.title2.bold())
 
-            // -------------------------------------------------
-            // Individual peptide-bond cards
-            // -------------------------------------------------
-
-            ForEach(
-                pipeline.peptideBondDiagnostics
-            ) { diagnostic in
-
-                PeptideBondDiagnosticCard(
-                    diagnostic:
-                        diagnostic
+                Text(
+                    pipeline.status
                 )
-            }
+                .font(.headline)
 
-            // -------------------------------------------------
-            // Final molecule
-            // -------------------------------------------------
+                // -------------------------------------------------
+                // Eight molecular-assembly stage cards
+                // -------------------------------------------------
 
-            if pipeline.isPeptide {
+                ForEach(
+                    pipeline.stageDiagnostics
+                ) { diagnostic in
 
-                VStack(
-                    alignment: .leading,
-                    spacing: 8
-                ) {
-
-                    Text(
-                        "FINAL MOLECULE"
+                    MolecularAssemblyDiagnosticCard(
+                        diagnostic:
+                            diagnostic
                     )
-                    .font(.headline)
-
-                    Text(
-                        pipeline.finalMolecule
-                    )
-                    .font(
-                        .body.monospaced()
-                    )
-
-                    Text(
-                        "Classification: Tetrapeptide"
-                    )
-                    .font(.headline)
-
-                    Text(
-                        "Three peptide bonds formed."
-                    )
-                    .font(.caption)
                 }
-                .padding()
-                .background(
-                    .regularMaterial
-                )
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius: 12
-                    )
-                )
-            }
-        }
-        .padding()
-    }
-}
 
+                // -------------------------------------------------
+                // Individual peptide-bond cards
+                // -------------------------------------------------
+
+                ForEach(
+                    pipeline.peptideBondDiagnostics
+                ) { diagnostic in
+
+                    PeptideBondDiagnosticCard(
+                        diagnostic:
+                            diagnostic
+                    )
+                }
+
+                // -------------------------------------------------
+                // Final molecule
+                // -------------------------------------------------
+
+                if pipeline.isPeptide {
+
+                    VStack(
+                        alignment: .leading,
+                        spacing: 8
+                    ) {
+
+                        Text(
+                            "FINAL MOLECULE"
+                        )
+                        .font(.headline)
+
+                        Text(
+                            pipeline.finalMolecule
+                        )
+                        .font(
+                            .body.monospaced()
+                        )
+
+                        Text(
+                            "Classification: Tetrapeptide"
+                        )
+                        .font(.headline)
+
+                        Text(
+                            "Three peptide bonds formed."
+                        )
+                        .font(.caption)
+                    }
+                    .padding()
+                    .background(
+                        .regularMaterial
+                    )
+                    .clipShape(
+                        RoundedRectangle(
+                            cornerRadius: 12
+                        )
+                    )
+                }
+            }
+            .padding()
+        }
+    }
 }
