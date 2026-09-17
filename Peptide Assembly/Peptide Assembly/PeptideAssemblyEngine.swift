@@ -504,30 +504,106 @@ final class PeptideAssemblyEngine: ObservableObject {
     }
 
     private func calculateField() {
-        let resonanceResponse = exp(-pow((resonanceFrequency - 1.0) / 0.20, 2.0))
-        fieldValue = qrtlCurrent * qrtlFieldGain * (0.25 + 0.75 * coherence) * resonanceResponse
+
+        let center: SIMD3<Double>
+
+        if aminoAcids.count >= 2 {
+            center =
+                (aminoAcids[0].position + aminoAcids[1].position) * 0.5
+        } else {
+            center = SIMD3<Double>(
+                0.0,
+                0.0,
+                0.0
+            )
+        }
+
+        let resonanceResponse =
+            exp(
+                -pow(
+                    (resonanceFrequency - 1.0) / 0.20,
+                    2.0
+                )
+            )
+
+        let fieldValue =
+            qrtlCurrent
+            * qrtlFieldGain
+            * (0.25 + 0.75 * coherence)
+            * resonanceResponse
+
+        let bondRadius = 0.85
+
         for i in cells.indices {
-            let r = max(0.001, simd_length(cells[i].position))
-            let spatial = 1.0 / (1.0 + r * r)
-            cells[i].qrtlField = fieldValue * spatial
-            cells[i].phase = 2.0 * Double.pi * resonanceFrequency * (r / 3.0)
-            cells[i].coherence = coherence
+
+            let distance =
+                max(
+                    0.001,
+                    simd_distance(
+                        cells[i].position,
+                        center
+                    )
+                )
+
+            let spatial =
+                exp(
+                    -pow(
+                        distance / bondRadius,
+                        2.0
+                    )
+                )
+
+            cells[i].qrtlField =
+                fieldValue * spatial
+
+            cells[i].phase =
+                2.0
+                * Double.pi
+                * resonanceFrequency
+                * (distance / 3.0)
+
+            cells[i].coherence =
+                coherence
         }
     }
 
     private func calculateQRTLEnergy() {
+
+        let center: SIMD3<Double>
+
+        if aminoAcids.count >= 2 {
+            center =
+                (aminoAcids[0].position + aminoAcids[1].position)
+                * 0.5
+        } else {
+            center = SIMD3<Double>(0.0, 0.0, 0.0)
+        }
+
+        calculateQRTLEnergy(centeredAt: center)
+    }
+    private func calculateQRTLEnergy(
+        centeredAt center: SIMD3<Double>
+    ) {
         calculateField()
+
         for i in cells.indices {
             let c = cells[i]
-            let phaseTerm = 0.5 + 0.5 * cos(c.phase)
+
+            let phaseTerm =
+                0.5 + 0.5 * cos(c.phase)
+
             cells[i].energy =
-                qrtlEnergyCoupling *
-                c.qrtlField *
-                c.coherence *
-                phaseTerm *
-                (1.0 + densityCoupling * c.density)
+                qrtlEnergyCoupling
+                * c.qrtlField
+                * c.coherence
+                * phaseTerm
+                * (1.0 + densityCoupling * c.density)
         }
-        qrtlEnergy = cells.reduce(0) { $0 + $1.energy }
+
+        qrtlEnergy =
+            cells.reduce(0.0) {
+                $0 + $1.energy
+            }
     }
 
     private func calculateChemicalEnergy() {
@@ -1058,7 +1134,9 @@ final class PeptideAssemblyEngine: ObservableObject {
     }
 
     private func attemptCoupling() {
+
         let e = evaluateTransition()
+
         chemicalEnergy = e.deltaGChemical
         qrtlEnergy = e.deltaEqrtl
         effectiveEnergy = e.deltaGEffective
@@ -1069,52 +1147,234 @@ final class PeptideAssemblyEngine: ObservableObject {
             return
         }
 
-        // CA transports / redistributes energy before the bond test.
+        // MARK: - Bond geometry
+
+        let firstResidue = aminoAcids[0]
+        let secondResidue = aminoAcids[1]
+
+        let bondMidpoint =
+            (firstResidue.position + secondResidue.position) * 0.5
+
+        // MARK: - CA energy state BEFORE transport
+
+        let initialEnergy =
+            cells.reduce(0.0) {
+                $0 + $1.energy
+            }
+
+        let initialAverageEnergy =
+            initialEnergy / Double(max(cells.count, 1))
+
+        let initialMaxEnergy =
+            cells.map(\.energy).max() ?? 0.0
+
+        let initialMinEnergy =
+            cells.map(\.energy).min() ?? 0.0
+
+        // MARK: - CA transport / redistribution
+        //
+        // This is intentionally performed only once.
+        // The transport operation should conserve total CA energy
+        // while redistributing energy spatially.
+
         enforceNeighborFlowBalance()
 
-        let initialEnergy = cells.reduce(0.0) { $0 + $1.energy }
-        let transportedEnergy = cells.reduce(0.0) { $0 + $1.energy }
-        let localEnergyDensity = transportedEnergy / Double(max(cells.count, 1))
+        let transportedEnergy =
+            cells.reduce(0.0) {
+                $0 + $1.energy
+            }
 
-        // Local QRTL field and phase state.
-        let localField = cells.isEmpty ? 0.0 :
-            cells.reduce(0.0) { $0 + $1.qrtlField } / Double(cells.count)
-        let phaseDifference = cells.count >= 2
-            ? abs(cells[0].phase - cells[1].phase)
+        let averageCellEnergy =
+            transportedEnergy / Double(max(cells.count, 1))
+
+        let maxCellEnergy =
+            cells.map(\.energy).max() ?? 0.0
+
+        let minCellEnergy =
+            cells.map(\.energy).min() ?? 0.0
+
+        let energyChange =
+            transportedEnergy - initialEnergy
+
+        let energyChangePercent =
+            initialEnergy > 0.0
+                ? (energyChange / initialEnergy) * 100.0
+                : 0.0
+
+        // MARK: - Bond-centered QRTL field
+        //
+        // The QRTL field is centered on the actual A-B bond midpoint
+        // rather than the global simulation origin.
+
+        calculateQRTLEnergy(
+            centeredAt: bondMidpoint
+        )
+
+        // MARK: - Local bond energy
+
+        let bondSite = bondSiteEnergy(
+            first: firstResidue,
+            second: secondResidue
+        )
+
+        let energyA = bondSite.energyA
+        let energyB = bondSite.energyB
+        let localEnergyDensity = bondSite.bondEnergyDensity
+
+        // MARK: - Local QRTL field
+
+        let localField = bondSite.bondEnergyDensity > 0.0
+            ? cells
+                .filter {
+                    simd_distance(
+                        $0.position,
+                        bondMidpoint
+                    ) <= 0.85
+                }
+                .reduce(0.0) {
+                    $0 + $1.qrtlField
+                }
+                / Double(
+                    max(
+                        cells.filter {
+                            simd_distance(
+                                $0.position,
+                                bondMidpoint
+                            ) <= 0.85
+                        }.count,
+                        1
+                    )
+                )
             : 0.0
 
-        // Pressure is a model-defined quantity derived from local energy density.
-        let pressureA = localEnergyDensity * (1.0 + localField)
-        let pressureB = localEnergyDensity * (1.0 + localField)
-        let deltaPressure = pressureA - pressureB
+        // MARK: - Local phase state
 
-        let phaseFactor = max(0.0, cos(phaseDifference))
-        let bondEnergy = localEnergyDensity * localField * coherence * phaseFactor
+        let bondCells = cells.filter {
+            simd_distance(
+                $0.position,
+                bondMidpoint
+            ) <= 0.85
+        }
+
+        let phaseDifference: Double
+
+        if bondCells.count >= 2 {
+            phaseDifference =
+                abs(
+                    bondCells[0].phase
+                    - bondCells[1].phase
+                )
+        } else {
+            phaseDifference = 0.0
+        }
+
+        let phaseFactor =
+            max(
+                0.0,
+                cos(phaseDifference)
+            )
+
+        // MARK: - Pressure
+        //
+        // Pressure remains a model-defined quantity derived from
+        // the localized bond energy and QRTL field.
+
+        let pressureA =
+            energyA * (1.0 + localField)
+
+        let pressureB =
+            energyB * (1.0 + localField)
+
+        let deltaPressure =
+            pressureA - pressureB
+
+        // MARK: - Bond energy
+
+        let bondEnergy =
+            localEnergyDensity
+            * localField
+            * coherence
+            * phaseFactor
+
+        // MARK: - Bond-formation gates
 
         var failures: [String] = []
+
         if abs(deltaPressure) > allowableDeltaPressure {
-            failures.append(String(format: "ΔP %.5f exceeds allowed %.5f.", abs(deltaPressure), allowableDeltaPressure))
+            failures.append(
+                String(
+                    format:
+                        "ΔP %.5f exceeds allowed %.5f.",
+                    abs(deltaPressure),
+                    allowableDeltaPressure
+                )
+            )
         }
+
         if bondEnergy < minimumBondEnergy {
-            failures.append(String(format: "Bond energy %.5f is below minimum %.5f.", bondEnergy, minimumBondEnergy))
+            failures.append(
+                String(
+                    format:
+                        "Bond energy %.5f is below minimum %.5f.",
+                    bondEnergy,
+                    minimumBondEnergy
+                )
+            )
         }
+
         if coherence < minimumBondCoherence {
-            failures.append(String(format: "Coherence %.5f is below required %.5f.", coherence, minimumBondCoherence))
+            failures.append(
+                String(
+                    format:
+                        "Coherence %.5f is below required %.5f.",
+                    coherence,
+                    minimumBondCoherence
+                )
+            )
         }
+
         if phaseDifference > maximumPhaseDifference {
-            failures.append(String(format: "Phase difference %.5f exceeds allowed %.5f.", phaseDifference, maximumPhaseDifference))
+            failures.append(
+                String(
+                    format:
+                        "Phase difference %.5f exceeds allowed %.5f.",
+                    phaseDifference,
+                    maximumPhaseDifference
+                )
+            )
         }
-        if e.probability < 0.50 { failures.append("Transition probability is below 0.50.") }
-        if e.orientationFactor < 0.70 { failures.append("Orientation compatibility is below 0.70.") }
-        if e.distanceFactor < 0.65 { failures.append("Distance compatibility is below 0.65.") }
+
+        if e.probability < 0.50 {
+            failures.append(
+                "Transition probability is below 0.50."
+            )
+        }
+
+        if e.orientationFactor < 0.70 {
+            failures.append(
+                "Orientation compatibility is below 0.70."
+            )
+        }
+
+        if e.distanceFactor < 0.65 {
+            failures.append(
+                "Distance compatibility is below 0.65."
+            )
+        }
 
         let formed = failures.isEmpty
-        let reason = formed ? "All model bond-formation gates passed." : failures.joined(separator: " ")
+
+        let reason =
+            formed
+                ? "All model bond-formation gates passed."
+                : failures.joined(separator: " ")
+
+        // MARK: - Diagnostic record
 
         latestBondDiagnostic = PeptideBondDiagnostic(
             bondNumber: max(1, peptideBondCount + 1),
-            firstResidue: aminoAcids[0].name,
-            secondResidue: aminoAcids[1].name,
+            firstResidue: firstResidue.name,
+            secondResidue: secondResidue.name,
             initialEnergy: initialEnergy,
             finalEnergy: transportedEnergy,
             transportedEnergy: transportedEnergy - initialEnergy,
@@ -1129,40 +1389,245 @@ final class PeptideAssemblyEngine: ObservableObject {
             formed: formed,
             failureReason: reason
         )
-        
 
+        // MARK: - Bond result
 
         if formed {
-            peptideBondCount = max(peptideBondCount, 1)
+
+            peptideBondCount =
+                max(
+                    peptideBondCount,
+                    1
+                )
+
             aminoAcids[0].bondedToNext = true
-            for i in cells.indices { cells[i].state = .peptideBond }
+
+            for i in cells.indices {
+                cells[i].state = .peptideBond
+            }
+
             bondFailureMessage = nil
-            statusMessage = "Controlled coupling accepted: CA transport → local QRTL density → field → pressure → bond gate passed."
+
+            statusMessage =
+                "Controlled coupling accepted: CA transport → bond-local QRTL field → local energy density → pressure → bond gate passed."
+
         } else {
-            bondFailureMessage = "Peptide bond formation was blocked.\n\n" + reason
-            statusMessage = "Controlled coupling rejected by the diagnostic bond-formation gate."
+
+            bondFailureMessage =
+                "Peptide bond formation was blocked.\n\n"
+                + reason
+
+            statusMessage =
+                "Controlled coupling rejected by the diagnostic bond-formation gate."
         }
-        
+
+        // MARK: - Bond-energy debug
+
         print("""
         ══════════════════════════════════════════════
         ⚡ PEPTIDE BOND-ENERGY DEBUG
         ══════════════════════════════════════════════
+
+        AMINO ACID A
+        \(firstResidue.name)
+        Position: \(firstResidue.position)
+
+        AMINO ACID B
+        \(secondResidue.name)
+        Position: \(secondResidue.position)
+
+        BOND MIDPOINT
+        \(bondMidpoint)
+
+        LOCAL BOND CELLS
+        \(bondCells.count)
+
+        Energy A: \(energyA)
+        Energy B: \(energyB)
+
         Local energy density: \(localEnergyDensity)
         Local QRTL field: \(localField)
         Coherence: \(coherence)
         Phase difference: \(phaseDifference)
         Phase factor: \(phaseFactor)
+
+        Pressure A: \(pressureA)
+        Pressure B: \(pressureB)
+        Delta pressure: \(deltaPressure)
+
         Bond energy: \(bondEnergy)
         Minimum bond energy: \(minimumBondEnergy)
-        Energy ratio: \(bondEnergy / minimumBondEnergy)
+
+        Energy ratio:
+        \(bondEnergy / max(minimumBondEnergy, 0.0000001))
+
         ══════════════════════════════════════════════
         """)
-        
-    }
 
+        // MARK: - CA energy forensics
+
+        print("""
+        ══════════════════════════════════════════════
+        ⚡ CA ENERGY FORENSICS
+        ══════════════════════════════════════════════
+
+        CELL COUNT
+        -----------
+        Cells: \(cells.count)
+
+        BEFORE CA TRANSPORT
+        -------------------
+        Total energy: \(initialEnergy)
+        Average cell energy: \(initialAverageEnergy)
+        Minimum cell energy: \(initialMinEnergy)
+        Maximum cell energy: \(initialMaxEnergy)
+
+        AFTER CA TRANSPORT
+        ------------------
+        Total energy: \(transportedEnergy)
+        Average cell energy: \(averageCellEnergy)
+        Minimum cell energy: \(minCellEnergy)
+        Maximum cell energy: \(maxCellEnergy)
+
+        TRANSPORT CHANGE
+        ----------------
+        Total energy change: \(energyChange)
+        Energy change %: \(energyChangePercent)%
+
+        BOND INPUT
+        ----------
+        Energy density used by bond calculation:
+        \(localEnergyDensity)
+
+        ══════════════════════════════════════════════
+        """)
+
+        // MARK: - Energy-location forensics
+
+        let sortedEnergyCells =
+            cells
+                .enumerated()
+                .sorted {
+                    $0.element.energy > $1.element.energy
+                }
+
+        print("""
+        ══════════════════════════════════════════════
+        ⚡ CA ENERGY LOCATION FORENSICS
+        ══════════════════════════════════════════════
+
+        AMINO ACID A POSITION
+        \(firstResidue.position)
+
+        AMINO ACID B POSITION
+        \(secondResidue.position)
+
+        BOND MIDPOINT
+        \(bondMidpoint)
+
+        TOP ENERGY CELLS
+        ----------------
+        """)
+
+        for (rank, item)
+            in sortedEnergyCells.prefix(10).enumerated() {
+
+            let index = item.offset
+            let cell = item.element
+
+            let distanceA =
+                simd_distance(
+                    cell.position,
+                    firstResidue.position
+                )
+
+            let distanceB =
+                simd_distance(
+                    cell.position,
+                    secondResidue.position
+                )
+
+            let distanceBond =
+                simd_distance(
+                    cell.position,
+                    bondMidpoint
+                )
+
+            print("""
+            #\(rank + 1)
+              Cell index: \(index)
+              Energy: \(cell.energy)
+              Position: \(cell.position)
+              Distance to A: \(distanceA)
+              Distance to B: \(distanceB)
+              Distance to bond midpoint: \(distanceBond)
+            """)
+        }
+
+        print("""
+        ══════════════════════════════════════════════
+        """)
+    }
     func clearBondFailure() {
         bondFailureMessage = nil
     }
+
+    private func bondSiteEnergy(
+        first: AminoAcidUnit,
+        second: AminoAcidUnit,
+        radius: Double = 0.85
+    ) -> (
+        energyA: Double,
+        energyB: Double,
+        bondEnergyDensity: Double,
+        cellCountA: Int,
+        cellCountB: Int
+    ) {
+
+        let midpoint = (first.position + second.position) * 0.5
+
+        // Cells surrounding amino acid A.
+        let cellsA = cells.filter {
+            simd_distance($0.position, first.position) <= radius
+        }
+
+        // Cells surrounding amino acid B.
+        let cellsB = cells.filter {
+            simd_distance($0.position, second.position) <= radius
+        }
+
+        // Cells surrounding the actual bond midpoint.
+        let bondCells = cells.filter {
+            simd_distance($0.position, midpoint) <= radius
+        }
+
+        let energyA =
+            cellsA.isEmpty
+            ? 0.0
+            : cellsA.reduce(0.0) { $0 + $1.energy }
+                / Double(cellsA.count)
+
+        let energyB =
+            cellsB.isEmpty
+            ? 0.0
+            : cellsB.reduce(0.0) { $0 + $1.energy }
+                / Double(cellsB.count)
+
+        let bondEnergyDensity =
+            bondCells.isEmpty
+            ? (energyA + energyB) * 0.5
+            : bondCells.reduce(0.0) { $0 + $1.energy }
+                / Double(bondCells.count)
+
+        return (
+            energyA: energyA,
+            energyB: energyB,
+            bondEnergyDensity: bondEnergyDensity,
+            cellCountA: cellsA.count,
+            cellCountB: cellsB.count
+        )
+    }
+
 
     private func recordCondensation() {
         if peptideBondCount > 0 {
