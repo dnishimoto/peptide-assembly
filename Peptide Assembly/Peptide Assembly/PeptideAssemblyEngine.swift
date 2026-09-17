@@ -1,9 +1,6 @@
-//
-//  File.swift
-//  Peptide Assembly
-//
-//  Created by David Nishimoto on 9/16/26.
-//
+/*
+ Coherence means that parts of a system maintain a consistent relationship in phase, timing, or state with each other.
+ */
 
 import Foundation
 import Combine
@@ -194,6 +191,7 @@ final class PeptideAssemblyEngine: ObservableObject {
             whyItMatters: "This isolates the predicted QRTL effect on the transition.",
             analogy: "The conductor changes the timing pressure on the transition."
         ),
+     
         PeptideStage(
             number: "15", title: "Effective Free Energy",
             equation: "ΔG_effective = ΔG_chemical + ΔE_QRTL",
@@ -209,77 +207,84 @@ final class PeptideAssemblyEngine: ObservableObject {
             analogy: "A well-synchronized transition becomes more likely to occur."
         ),
         PeptideStage(
-            number: "17", title: "Controlled Peptide Coupling",
+        number: "17", title: "Coherence",
+        equation: "C = (1 + cos(Δφ)) / 2",
+        whatHappened: "The phase difference between the interacting molecular states is converted into a normalized coherence value from 0 to 1.",
+        whyItMatters: "Coherence quantifies how closely the interacting states are phase-aligned before the model attempts QRTL coupling.",
+        analogy: "Two dancers moving in step have high coherence; dancers moving out of step have low coherence."
+        ),
+        PeptideStage(
+            number: "18", title: "Controlled Peptide Coupling",
             equation: "P_transition + geometry + availability → peptide bond",
             whatHappened: "A coupling event is permitted only when the energy probability and geometric/bonding conditions meet the model threshold.",
             whyItMatters: "The peptide bond is an output of the calculated transition, not an unconditional command.",
             analogy: "Two compatible musical phrases become connected."
         ),
         PeptideStage(
-            number: "18", title: "Condensation Product",
+            number: "19", title: "Condensation Product",
             equation: "amino acid + amino acid → peptide bond + H₂O",
             whatHappened: "A successful peptide-coupling event records the corresponding condensation product as water in the model.",
             whyItMatters: "The assembly step corresponds to the chemical concept of condensation rather than merely drawing a connecting line.",
             analogy: "The completed connection releases a small residual note."
         ),
         PeptideStage(
-            number: "19", title: "Chain Growth",
+            number: "20", title: "Chain Growth",
             equation: "P_n + P_1 → P_(n+1)",
             whatHappened: "The coupled amino-acid units become a longer peptide chain, and the process can be repeated for the next programmed residue.",
             whyItMatters: "A peptide is a sequence of repeated coupling events rather than a single bond.",
             analogy: "A chord becomes a phrase, then a longer musical passage."
         ),
         PeptideStage(
-            number: "20", title: "Repeat the Controlled Cycle",
+            number: "21", title: "Repeat the Controlled Cycle",
             equation: "field → energy → CA → orientation → ΔG → P → bond",
             whatHappened: "The same equations are recalculated after each controlled assembly step.",
             whyItMatters: "A defensible model must preserve the same causal pipeline instead of switching to a different rule after the first bond.",
             analogy: "The orchestra repeatedly listens and adjusts."
         ),
         PeptideStage(
-            number: "21", title: "Complete Programmed Sequence",
+            number: "22", title: "Complete Programmed Sequence",
             equation: "P₁ + P₂ + … + P_n → programmed peptide",
             whatHappened: "The programmed sequence is complete when every required coupling event has been accepted.",
             whyItMatters: "The final chain is an accumulated result of individual transitions.",
             analogy: "The complete musical phrase has been performed."
         ),
         PeptideStage(
-            number: "22", title: "Conformational Search",
+            number: "23", title: "Conformational Search",
             equation: "G_total = G_chemical + G_electrostatic + G_environment + G_QRTL",
             whatHappened: "The completed chain explores candidate three-dimensional conformations using multiple energy contributions.",
             whyItMatters: "Assembly and folding are distinct problems and should not be conflated.",
             analogy: "The full orchestra experiments with different arrangements."
         ),
         PeptideStage(
-            number: "23", title: "Energy Ranking",
+            number: "24", title: "Energy Ranking",
             equation: "G_total(q) → rank{q₁,q₂,…,q_n}",
             whatHappened: "Candidate conformations are ranked by the total modeled energy.",
             whyItMatters: "The visualization can show why one modeled conformation is preferred without claiming it is experimentally proven.",
             analogy: "Different performances are compared for stability and coherence."
         ),
         PeptideStage(
-            number: "24", title: "Peptide Folding",
+            number: "25", title: "Peptide Folding",
             equation: "q(t+Δt) → lower G_total(q) subject to constraints",
             whatHappened: "The chain is moved through a simplified conformational landscape toward lower-energy configurations.",
             whyItMatters: "Folding is an energy-landscape problem rather than a predetermined final drawing.",
             analogy: "The musicians settle into the most stable arrangement."
         ),
         PeptideStage(
-            number: "25", title: "Stable Modeled Structure",
+            number: "26", title: "Stable Modeled Structure",
             equation: "∂G_total/∂q ≈ 0  and  ΔG > 0 for local perturbations",
             whatHappened: "The displayed conformation is treated as a local minimum of the simplified model.",
             whyItMatters: "The result is a modeled stable state, not proof of a real biological structure.",
             analogy: "The orchestra reaches a stable interpretation."
         ),
         PeptideStage(
-            number: "26", title: "QRTL Control Comparison",
+            number: "27", title: "QRTL Control Comparison",
             equation: "ΔP = P(I_QRTL,f_QRTL,C) − P(0,f_QRTL,C)",
             whatHappened: "The model compares the predicted transition probability with QRTL enabled against the corresponding control.",
             whyItMatters: "A causal claim requires a control comparison rather than observing a single successful run.",
             analogy: "The same passage is played with and without the conductor's timing signal."
         ),
         PeptideStage(
-            number: "27", title: "Experimental Prediction",
+            number: "28", title: "Experimental Prediction",
             equation: "measured ΔP ≈ modeled ΔP  ?",
             whatHappened: "The final panel states what would have to be measured before the proposed QRTL contribution could be considered experimentally supported.",
             whyItMatters: "The simulation becomes falsifiable only when its parameters and predictions can be compared with measurements.",
@@ -372,22 +377,32 @@ final class PeptideAssemblyEngine: ObservableObject {
         case 13: calculateQRTLDeltaE()
         case 14: calculateEffectiveDeltaG()
         case 15: calculateTransition()
-        case 16: attemptCoupling()
-        case 17: recordCondensation()
-        case 18: growChain()
-        case 19: repeatCycle()
-        case 20: completeSequence()
-        case 21: conformationalSearch()
-        case 22: rankConformations()
-        case 23: fold()
-        case 24: stabilize()
-        case 25: compareControl()
-        case 26: prepareExperimentalPrediction()
+        case 16: calculateCoherence()
+        case 17: attemptCoupling()
+        case 18: recordCondensation()
+        case 19: growChain()
+        case 20: repeatCycle()
+        case 21: completeSequence()
+        case 22: conformationalSearch()
+        case 23: rankConformations()
+        case 24: fold()
+        case 25: stabilize()
+        case 26: compareControl()
+        case 27: prepareExperimentalPrediction()
         default: break
         }
         recalculate()
     }
-    
+    private func calculateCoherence() {
+        guard cells.count >= 2 else {
+            coherence = 0.0
+            return
+        }
+
+        let phaseDifference = abs(cells[0].phase - cells[1].phase)
+
+        coherence = 0.5 * (1.0 + cos(phaseDifference))
+    }
     func calculateQRTLCurrent(
         distanceFactor: Double,
         orientationFactor: Double,

@@ -224,17 +224,17 @@ struct ContentView: View {
                 Divider().opacity(0.3)
 
                 HStack(spacing: 10) {
-                    metric("I_QRTL", engine.qrtlCurrent, "%.3f")
-                    metric("f_QRTL", engine.resonanceFrequency, "%.3f")
-                    metric("C", engine.coherence, "%.3f")
+                    metric("Current", engine.qrtlCurrent, "%.3f")
+                    metric("Resonance Frequency", engine.resonanceFrequency, "%.3f")
+                    metric("Coherence", engine.coherence, "%.3f")
                     metric("B_Q", engine.fieldValue, "%.3f")
                 }
 
                 HStack(spacing: 10) {
-                    metric("Echem", engine.chemicalEnergy, "%.4f")
-                    metric("EQRTL", engine.qrtlEnergy, "%.4f")
-                    metric("Eeff", engine.effectiveEnergy, "%.4f")
-                    metric("P", engine.transitionProbability, "%.4f")
+                    metric("Chemical Energy", engine.chemicalEnergy, "%.4f")
+                    metric("Energy", engine.qrtlEnergy, "%.4f")
+                    metric("Effective Energy", engine.effectiveEnergy, "%.4f")
+                    metric("Transition Probability", engine.transitionProbability, "%.4f")
                 }
 
                 HStack(spacing: 10) {
