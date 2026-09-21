@@ -654,6 +654,21 @@ final class PeptideAssemblyEngine: ObservableObject {
         case 4:
             calculateQRTLEnergy()
             updateChemicalEnergy()
+            for i in cells.indices {
+                // existing CA calculations
+            }
+
+            // NEW: concentrate existing energy at active bond
+            if aminoAcids.count > 1 {
+                let activeBondIndex =
+                    min(peptideBondCount, aminoAcids.count - 2)
+
+                focusEnergyTowardBond(
+                    bondIndex: activeBondIndex,
+                    strength: 0.85,
+                    radius: 2.0
+                )
+            }
 
         case 5:
             calculateChemicalEnergy()
@@ -2035,6 +2050,174 @@ final class PeptideAssemblyEngine: ObservableObject {
         }
         statusMessage = "The same field → energy → CA → orientation → ΔG → P → bond cycle is retained."
     }
+    private func focusEnergyTowardBond(
+        bondIndex: Int,
+        strength: Double = 0.85,
+        radius: Double = 2.0
+    ) {
+        guard aminoAcids.indices.contains(bondIndex),
+              aminoAcids.indices.contains(bondIndex + 1),
+              !cells.isEmpty else {
+            return
+        }
+
+        let left = aminoAcids[bondIndex]
+        let right = aminoAcids[bondIndex + 1]
+
+        // Center of the reacting peptide bond.
+        let bondCenter =
+            (left.position + right.position) * 0.5
+
+        // Bond axis.
+        let bondVector = right.position - left.position
+        let bondLength = simd_length(bondVector)
+
+        guard bondLength > 0.000001 else {
+            return
+        }
+
+        let bondAxis = bondVector / bondLength
+
+        // --------------------------------------------------------
+        // Calculate how strongly each CA cell participates in the
+        // localized bond reaction zone.
+        // --------------------------------------------------------
+
+        var weights = Array(repeating: 0.0, count: cells.count)
+        var totalWeight = 0.0
+
+        for i in cells.indices {
+
+            let displacement =
+                cells[i].position - bondCenter
+
+            let distance =
+                simd_length(displacement)
+
+            guard distance < radius else {
+                continue
+            }
+
+            // Radial localization.
+            let radialWeight =
+                exp(
+                    -pow(distance / max(radius, 0.000001), 2.0) * 3.0
+                )
+
+            // Favor cells close to the bond axis.
+            let axialProjection =
+                simd_dot(displacement, bondAxis)
+
+            let perpendicular =
+                displacement - bondAxis * axialProjection
+
+            let perpendicularDistance =
+                simd_length(perpendicular)
+
+            let axialWeight =
+                exp(
+                    -pow(
+                        perpendicularDistance /
+                        max(radius * 0.55, 0.000001),
+                        2.0
+                    )
+                )
+
+            // Existing QRTL field provides an additional preference
+            // for cells already participating in the QRTL excitation.
+            let fieldWeight =
+                0.5 +
+                0.5 *
+                max(
+                    0.0,
+                    min(
+                        1.0,
+                        cells[i].qrtlField
+                    )
+                )
+
+            let weight =
+                radialWeight *
+                axialWeight *
+                fieldWeight
+
+            weights[i] = weight
+            totalWeight += weight
+        }
+
+        guard totalWeight > 0.000001 else {
+            return
+        }
+
+        // --------------------------------------------------------
+        // Determine how much energy is available to redistribute.
+        // --------------------------------------------------------
+
+        let totalEnergy =
+            cells.reduce(into: 0.0) {
+                $0 += max(0.0, $1.energy)
+            }
+
+        guard totalEnergy > 0.000001 else {
+            return
+        }
+
+        // Only redistribute a fraction of the existing energy.
+        // This prevents the localization step from creating energy.
+        let transferableEnergy =
+            totalEnergy *
+            max(
+                0.0,
+                min(
+                    1.0,
+                    strength
+                )
+            )
+
+        // --------------------------------------------------------
+        // Remove transferable energy proportionally from the CA.
+        // --------------------------------------------------------
+
+        var removedEnergy = 0.0
+
+        for i in cells.indices {
+
+            guard cells[i].energy > 0.0 else {
+                continue
+            }
+
+            let removalFraction =
+                transferableEnergy / totalEnergy
+
+            let amount =
+                cells[i].energy * removalFraction
+
+            cells[i].energy =
+                max(
+                    0.0,
+                    cells[i].energy - amount
+                )
+
+            removedEnergy += amount
+        }
+
+        // --------------------------------------------------------
+        // Deposit exactly the removed energy into the bond region.
+        // --------------------------------------------------------
+
+        for i in cells.indices {
+
+            guard weights[i] > 0.0 else {
+                continue
+            }
+
+            let normalizedWeight =
+                weights[i] / totalWeight
+
+            cells[i].energy +=
+                removedEnergy * normalizedWeight
+        }
+    }
 
     private func completeSequence() {
 
@@ -2047,9 +2230,15 @@ final class PeptideAssemblyEngine: ObservableObject {
                 let left = aminoAcids[i]
                 let right = aminoAcids[i + 1]
 
-                // Existing QRTL quantities
+                // ========================================================
+                // QRTL INPUTS
+                // ========================================================
+
                 let localQRTLField = qrtlCurrent
 
+                // Use the actual phase difference here if available.
+                // This remains 0.0 until the real phase calculation
+                // is connected.
                 let phaseDifference = 0.0
 
                 let candidateResonance =
@@ -2057,10 +2246,12 @@ final class PeptideAssemblyEngine: ObservableObject {
                     qrtlEnergyCoupling *
                     (0.5 + 0.5 * coherence)
 
-                let reactantResonance =
-                    qrtlCurrent *
-                    qrtlEnergyCoupling *
-                    (0.5 + 0.5 * coherence)
+                // Control/reactant resonance is zero when QRTL is absent.
+                let reactantResonance = 0.0
+
+                // ========================================================
+                // BOND EVALUATION
+                // ========================================================
 
                 let evaluation = determineBondFormation(
                     positionA: left.position,
@@ -2079,6 +2270,96 @@ final class PeptideAssemblyEngine: ObservableObject {
                     minimumProbability: 0.50
                 )
 
+                // ========================================================
+                // QRTL-OFF CONTROL
+                //
+                // Same chemistry and geometry, but no QRTL contribution.
+                // ========================================================
+
+                let controlEvaluation = determineBondFormation(
+                    positionA: left.position,
+                    positionB: right.position,
+                    orientationA: left.orientation,
+                    orientationB: right.orientation,
+                    idealDistance: 1.20,
+                    chemicalDeltaG: chemicalBondScale,
+                    localEnergyDensity: 0.0,
+                    localQRTLField: 0.0,
+                    coherence: coherence,
+                    phaseDifference: phaseDifference,
+                    candidateResonance: 0.0,
+                    reactantResonance: 0.0,
+                    temperatureEnergy: modelKBT,
+                    minimumProbability: 0.50
+                )
+
+                let totalCAEnergy = cells.reduce(into: 0.0) { total, cell in
+                    total += cell.energy
+                }
+                
+                print("""
+                
+                ════════════════════════════════════════════════════════════
+                🔬 QRTL \(left.name) → \(right.name) TRANSITION DEBUG
+                ════════════════════════════════════════════════════════════
+
+                AMINO ACIDS
+                A: \(left.name) (\(left.code))
+                B: \(right.name) (\(right.code))
+
+                ────────────────────────────────────────────────────────────
+                POSITIONS
+                ────────────────────────────────────────────────────────────
+                A position: \(left.position)
+                B position: \(right.position)
+
+                Delta: \(right.position - left.position)
+
+                ════════════════════════════════════════════════════════════
+                ⚛️ QRTL ENABLED
+                ════════════════════════════════════════════════════════════
+
+                QRTL drive amplitude: \(qrtlDriveAmplitude)
+                Total CA energy: \(totalCAEnergy)
+                Local energy density: \(localEnergyDensity)
+                Local QRTL field: \(localQRTLField)
+
+                QRTL current: \(qrtlCurrent)
+                QRTL coupling: \(qrtlEnergyCoupling)
+
+                Coherence: \(coherence)
+                Phase difference: \(phaseDifference)
+
+                Candidate resonance: \(candidateResonance)
+                Reactant resonance: \(reactantResonance)
+
+                Accepted: \(evaluation.formed ? "✅ YES" : "❌ NO")
+
+                ════════════════════════════════════════════════════════════
+                🧪 QRTL-OFF CONTROL
+                ════════════════════════════════════════════════════════════
+
+                CA energy: 0.0
+                Local energy density: 0.0
+                Local QRTL field: 0.0
+                QRTL current: 0.0
+                Candidate resonance: 0.0
+                Reactant resonance: 0.0
+
+                Accepted: \(controlEvaluation.formed ? "✅ YES" : "❌ NO")
+
+                ────────────────────────────────────────────────────────────
+                QRTL EFFECT
+                ────────────────────────────────────────────────────────────
+
+
+                ════════════════════════════════════════════════════════════
+                """)
+
+                // ========================================================
+                // RECORD RESULT
+                // ========================================================
+
                 if evaluation.formed {
                     successful += 1
                     aminoAcids[i].bondedToNext = true
@@ -2089,6 +2370,7 @@ final class PeptideAssemblyEngine: ObservableObject {
         }
 
         peptideBondCount = successful
+
         peptideLength = successful + 1
 
         statusMessage =

@@ -30,9 +30,9 @@
             filePath = "Peptide Assembly/PeptideAssemblyEngine.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "959"
-            endingLineNumber = "959"
-            landmarkName = "calculateQRTLEnergy(centeredAt:)"
+            startingLineNumber = "974"
+            endingLineNumber = "974"
+            landmarkName = "calculateQRTLEnergy()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -46,9 +46,9 @@
             filePath = "Peptide Assembly/PeptideAssemblyEngine.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1944"
-            endingLineNumber = "1944"
-            landmarkName = "bondSiteEnergy(first:second:radius:)"
+            startingLineNumber = "1959"
+            endingLineNumber = "1959"
+            landmarkName = "attemptCoupling()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -62,8 +62,8 @@
             filePath = "Peptide Assembly/PeptideAssemblyEngine.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1702"
-            endingLineNumber = "1702"
+            startingLineNumber = "1717"
+            endingLineNumber = "1717"
             landmarkName = "attemptCoupling()"
             landmarkType = "7">
          </BreakpointContent>
