@@ -1,367 +1,378 @@
-//
-//  File.swift
-//  Peptide Assembly
-//
-//  Created by David Nishimoto on 9/15/26.
-//
 
-import Foundation
 import SwiftUI
 
-// MARK: - AboutView
-//
-// A professional "About" screen for the QRTL Peptide Assembly simulator.
-// It is built directly from the same PeptideAssemblyEngine pipeline that
-// drives the live simulation, so the stage descriptions shown here can
-// never drift out of sync with the model the user is actually watching.
-
 struct AboutView: View {
-    @ObservedObject var engine: PeptideAssemblyEngine
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var expandedStageID: PeptideStage.ID?
-
-    private let appVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0"
-    private let buildNumber = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? "1"
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                LinearGradient(
-                    colors: [Color.black, Color(red: 0.05, green: 0.08, blue: 0.11)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
 
-                ScrollView {
-                    VStack(spacing: 22) {
-                        heroHeader
-                        overviewCard
-                        metricsStrip
-                        pipelineSection
-                        disclaimerCard
-                        creditsFooter
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 8)
-                    .padding(.bottom, 28)
+                    // MARK: - Introduction
+
+                    informationPanel(
+                        title: "About Peptide Assembly",
+                        icon: "atom",
+                        text: """
+                        This simulation presents a conceptual model for assembling a peptide from individual molecular components.
+
+                        The process begins with atoms and molecular building blocks, organizes them into amino-acid structures, evaluates their local energy and interactions, and then progressively connects the amino acids into a peptide chain.
+
+                        The QRTL model is used as a proposed mechanism for describing local energy, coupling, phase, pressure, and structural interactions during molecular assembly.
+                        """
+                    )
+
+                    // MARK: - Overall Pipeline
+
+                    informationPanel(
+                        title: "Assembly Pipeline",
+                        icon: "arrow.triangle.branch",
+                        text: """
+                        The assembly pipeline moves through a sequence of physical and molecular stages.
+
+                        First, the system establishes the initial state of the molecular components. The components are then organized and evaluated. When neighboring molecular groups satisfy the required conditions, the simulation allows a molecular transition and possible bond formation.
+
+                        The process continues as additional amino acids are connected. Once the chain is complete, the simulation examines its three-dimensional structure and searches for a stable configuration.
+                        """
+                    )
+
+                    // MARK: - Stage 1
+
+                    stagePanel(
+                        number: 1,
+                        title: "Initialization",
+                        text: """
+                        The simulation creates the starting atoms and molecular components.
+
+                        Each component receives an initial position and state so the assembly process has a defined starting point.
+                        """
+                    )
+
+                    // MARK: - Stage 2
+
+                    stagePanel(
+                        number: 2,
+                        title: "Energy Shell Organization",
+                        text: """
+                        The atoms are organized according to their modeled energy states.
+
+                        This provides the foundation for determining how the particles can interact during later stages of assembly.
+                        """
+                    )
+
+                    // MARK: - Stage 3
+
+                    stagePanel(
+                        number: 3,
+                        title: "QRTL Field",
+                        text: """
+                        The proposed QRTL field provides a local interaction environment for the molecular components.
+
+                        The field is used by the simulation to represent relationships between nearby particles and to track how local energy is distributed through the system.
+                        """
+                    )
+
+                    // MARK: - Stage 4
+
+                    stagePanel(
+                        number: 4,
+                        title: "Particle Coupling",
+                        text: """
+                        Nearby particles are evaluated for their ability to interact.
+
+                        Coupling describes how strongly the modeled state of one particle can influence another particle.
+                        """
+                    )
+
+                    // MARK: - Stage 5
+
+                    stagePanel(
+                        number: 5,
+                        title: "Molecular Configuration",
+                        text: """
+                        The atoms are positioned into organized molecular groups.
+
+                        Their positions, orientations, and local energy states are evaluated as the molecular structure develops.
+                        """
+                    )
+
+                    // MARK: - Stage 6
+
+                    stagePanel(
+                        number: 6,
+                        title: "Amino-Acid Formation",
+                        text: """
+                        The required atoms are organized into amino-acid building blocks.
+
+                        Each building block must have the appropriate molecular arrangement before it can participate in peptide assembly.
+                        """
+                    )
+
+                    // MARK: - Stage 7
+
+                    stagePanel(
+                        number: 7,
+                        title: "Orientation",
+                        text: """
+                        The simulation evaluates the relative orientation of neighboring molecular groups.
+
+                        Proper orientation is important because two groups must be positioned appropriately before the model allows them to move toward a bonding transition.
+                        """
+                    )
+
+                    // MARK: - Stage 8
+
+                    stagePanel(
+                        number: 8,
+                        title: "Local Energy Evaluation",
+                        text: """
+                        The simulation evaluates the energy surrounding a potential molecular transition.
+
+                        Local energy density helps determine whether sufficient energy is present at the proposed interaction site.
+                        """
+                    )
+
+                    // MARK: - Stage 9
+
+                    stagePanel(
+                        number: 9,
+                        title: "Pressure and Structural Conditions",
+                        text: """
+                        The local pressure and structural environment are evaluated before a bond transition is accepted.
+
+                        These checks prevent the simulation from treating every nearby molecular contact as an automatic bond.
+                        """
+                    )
+
+                    // MARK: - Stage 10
+
+                    stagePanel(
+                        number: 10,
+                        title: "Coherence Evaluation",
+                        text: """
+                        The simulation evaluates how consistently the interacting molecular components are behaving.
+
+                        Greater coherence represents a more compatible local state for the proposed transition.
+                        """
+                    )
+
+                    // MARK: - Stage 11
+
+                    stagePanel(
+                        number: 11,
+                        title: "Bond Transition",
+                        text: """
+                        When the required local conditions are satisfied, the simulation permits a transition toward bond formation.
+
+                        The transition represents the modeled connection between two molecular building blocks.
+                        """
+                    )
+
+                    // MARK: - Stage 12
+
+                    stagePanel(
+                        number: 12,
+                        title: "Peptide-Bond Formation",
+                        text: """
+                        The compatible amino-acid groups are connected to form a peptide bond.
+
+                        This is the key step that changes separate amino-acid building blocks into a growing peptide chain.
+                        """
+                    )
+
+                    // MARK: - Stage 13
+
+                    stagePanel(
+                        number: 13,
+                        title: "Chain Growth",
+                        text: """
+                        Additional amino acids are introduced and evaluated for connection to the existing chain.
+
+                        The same assembly process is repeated as the peptide grows.
+                        """
+                    )
+
+                    // MARK: - Stage 14
+
+                    stagePanel(
+                        number: 14,
+                        title: "Sequence Completion",
+                        text: """
+                        The simulation continues until the requested amino-acid sequence has been assembled.
+
+                        For the demonstration, the target is a four-glycine peptide, commonly represented as Gly4.
+                        """
+                    )
+
+                    // MARK: - Stage 15
+
+                    stagePanel(
+                        number: 15,
+                        title: "Conformational Search",
+                        text: """
+                        After the peptide chain is assembled, the simulation explores possible three-dimensional arrangements.
+
+                        A peptide chain can adopt different shapes, so the model examines alternative configurations rather than assuming that one arrangement is automatically correct.
+                        """
+                    )
+
+                    // MARK: - Stage 16
+
+                    stagePanel(
+                        number: 16,
+                        title: "Folding and Stability",
+                        text: """
+                        The candidate structures are evaluated for their modeled stability.
+
+                        The purpose is to identify configurations that remain structurally consistent under the conditions represented by the simulation.
+                        """
+                    )
+
+                    // MARK: - Stage 17
+
+                    stagePanel(
+                        number: 17,
+                        title: "Final Verification",
+                        text: """
+                        The completed peptide is checked to confirm that the intended molecular sequence and connections have been produced.
+
+                        The final state provides the basis for examining the resulting structure and the calculated QRTL-related properties.
+                        """
+                    )
+
+                    // MARK: - Demonstration
+
+                    informationPanel(
+                        title: "Gly4 Demonstration",
+                        icon: "circle.grid.cross",
+                        text: """
+                        The demonstration assembles a tetrapeptide containing four glycine units.
+
+                        The resulting structure is represented as a chain with an amino end, four glycine-derived units, peptide connections between the units, and a carboxyl end.
+
+                        The simulation uses this simple peptide as a test case for demonstrating the complete molecular-assembly pipeline.
+                        """
+                    )
+
+                    // MARK: - Why QRTL Is Used
+
+                    informationPanel(
+                        title: "Why QRTL Is Used",
+                        icon: "waveform.path.ecg",
+                        text: """
+                        In this conceptual model, QRTL provides a way to organize and evaluate local interactions during molecular assembly.
+
+                        Instead of treating bond formation as an immediate rule based only on distance, the model considers several local properties together, including energy, pressure, coupling, orientation, and coherence.
+
+                        This allows the simulation to represent bond formation as a transition that occurs when the modeled local environment becomes sufficiently compatible.
+                        """
+                    )
+
+                    // MARK: - What the Equations Do
+
+                    informationPanel(
+                        title: "What the Model Calculates",
+                        icon: "function",
+                        text: """
+                        The underlying simulation contains calculations that determine local energy, energy density, field behavior, pressure differences, coupling, coherence, transition conditions, and structural stability.
+
+                        Those calculations remain part of the simulation engine. They are not displayed here as equations because the purpose of this screen is to explain the process in understandable terms.
+
+                        The About screen describes what the calculations accomplish rather than requiring the user to understand the mathematics behind them.
+                        """
+                    )
+
+                    // MARK: - Interpretation
+
+                    informationPanel(
+                        title: "How to Interpret the Simulation",
+                        icon: "info.circle",
+                        text: """
+                        The simulation is a computational and conceptual model. Its results describe what happens within the assumptions and rules implemented by the program.
+
+                        A successful simulated bond or stable peptide structure means that the modeled conditions were satisfied. It does not by itself establish that the proposed QRTL mechanism has been experimentally demonstrated.
+                        """
+                    )
                 }
+                .padding()
             }
-            .preferredColorScheme(.dark)
-            .navigationTitle("About")
+            .navigationTitle("About Peptide Assembly")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .fontWeight(.semibold)
-                }
-            }
         }
     }
 
-    // MARK: Hero header
+    // MARK: - Information Panel
 
-    private var heroHeader: some View {
-        VStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [Color.cyan.opacity(0.35), Color.cyan.opacity(0.0)],
-                            center: .center,
-                            startRadius: 2,
-                            endRadius: 60
-                        )
-                    )
-                    .frame(width: 108, height: 108)
+    private func informationPanel(
+        title: String,
+        icon: String,
+        text: String
+    ) -> some View {
 
-                Circle()
-                    .strokeBorder(Color.cyan.opacity(0.5), lineWidth: 1.2)
-                    .frame(width: 84, height: 84)
-
-                Image(systemName: "atom")
-                    .font(.system(size: 34, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.cyan, .white],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            .padding(.top, 6)
-
-            VStack(spacing: 5) {
-                Text("QRTL Peptide Assembly")
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .multilineTextAlignment(.center)
-
-                Text("A CONTROLLED SIMULATION OF QUARK-TWISTER RESONANCE\nLATTICE COUPLING TO MOLECULAR ASSEMBLY")
-                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(2)
-            }
-
-            HStack(spacing: 6) {
-                Image(systemName: "number")
-                    .font(.system(size: 9, weight: .bold))
-                Text("Version \(appVersion) (\(buildNumber))")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-            }
-            .foregroundStyle(.white.opacity(0.75))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(.ultraThinMaterial, in: Capsule())
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    // MARK: Overview
-
-    private var overviewCard: some View {
-        SectionCard(title: "Overview", icon: "text.alignleft") {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("This app models a proposed causal chain linking a controlled Quark-Twister Resonance Lattice (QRTL) field to peptide-bond formation and folding.")
-                    .aboutBody()
-
-                Text("A coarse-grained molecular lattice, an energy shell, and a resonance field are updated together at every step, so the same connected pipeline governs assembly and folding rather than two independent demonstrations.")
-                    .aboutBody()
-
-                Text("Every value shown during the simulation — field strength, resonance, coherence, chemical and QRTL energy, transition probability, and bond count — is produced by that single pipeline and can be traced back to the preceding stage.")
-                    .aboutBody()
-            }
-        }
-    }
-
-    // MARK: Metrics strip
-
-    private var metricsStrip: some View {
-        HStack(spacing: 10) {
-            aboutMetric(value: "\(engine.stages.count)", label: "PIPELINE\nSTAGES")
-            aboutMetric(value: "\(engine.programmedSequence.count)", label: "PROGRAMMED\nRESIDUES")
-            aboutMetric(value: "27", label: "COUPLED\nEQUATIONS")
-        }
-    }
-
-    private func aboutMetric(value: String, label: String) -> some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundStyle(.cyan)
-            Text(label)
-                .font(.system(size: 8, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .lineSpacing(1)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(.white.opacity(0.08), lineWidth: 1)
-        )
-    }
-
-    // MARK: Pipeline
-
-    private var pipelineSection: some View {
-        SectionCard(title: "How the Pipeline Works", icon: "point.3.connected.trianglepath.dotted") {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Every run advances through the same \(engine.stages.count) stages, in order. Tap a stage to see its governing equation and why it matters.")
-                    .aboutBody()
-                    .padding(.bottom, 4)
-
-                VStack(spacing: 8) {
-                    ForEach(engine.stages) { stage in
-                        StageDisclosureRow(
-                            stage: stage,
-                            isExpanded: expandedStageID == stage.id
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                expandedStageID = expandedStageID == stage.id ? nil : stage.id
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: Disclaimer
-
-    private var disclaimerCard: some View {
-        SectionCard(title: "Model Status", icon: "exclamationmark.triangle.fill", accent: .yellow) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("QRTL is a proposed, dimensionless coupling term, not an established physical mechanism. Every energy value in the simulation is a model unit until it is calibrated against a real experiment.")
-                    .aboutBody()
-
-                Text("The app always reports a control comparison — the predicted outcome with the QRTL term disabled — alongside the QRTL-enabled result, so a causal claim is never based on a single run.")
-                    .aboutBody()
-
-                Text("Folded structures shown here are local minima of a simplified conformational model, not experimentally validated biological structures.")
-                    .aboutBody()
-            }
-        }
-    }
-
-    // MARK: Credits
-
-    private var creditsFooter: some View {
-        VStack(spacing: 10) {
-            Divider().opacity(0.15)
-
-            HStack(spacing: 8) {
-                techBadge("SwiftUI")
-                techBadge("SceneKit")
-                techBadge("Combine")
-            }
-
-            Text("Built by David Nishimoto")
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.75))
-
-            Text("© \(currentYear) · All simulation results are theoretical.")
-                .font(.system(size: 9, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.top, 4)
-    }
-
-    private func techBadge(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 9, weight: .bold, design: .monospaced))
-            .foregroundStyle(.cyan.opacity(0.9))
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(.cyan.opacity(0.25), lineWidth: 1))
-    }
-
-    private var currentYear: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy"
-        return formatter.string(from: Date())
-    }
-}
-
-// MARK: - Reusable section card
-
-private struct SectionCard<Content: View>: View {
-    let title: String
-    let icon: String
-    var accent: Color = .cyan
-    @ViewBuilder let content: Content
-
-    var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 7) {
+
+            HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(accent)
-                Text(title.uppercased())
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .tracking(0.5)
+                    .font(.title3)
+
+                Text(title)
+                    .font(.headline)
             }
 
-            content
+            Text(text)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(.white.opacity(0.10), lineWidth: 1)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.secondary.opacity(0.10))
         )
     }
-}
 
-// MARK: - Stage row
+    // MARK: - Stage Panel
 
-private struct StageDisclosureRow: View {
-    let stage: PeptideStage
-    let isExpanded: Bool
-    let onToggle: () -> Void
+    private func stagePanel(
+        number: Int,
+        title: String,
+        text: String
+    ) -> some View {
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button(action: onToggle) {
-                HStack(alignment: .center, spacing: 10) {
-                    Text(stage.number)
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.black)
-                        .frame(width: 26, height: 26)
-                        .background(Color.cyan, in: Circle())
+        VStack(alignment: .leading, spacing: 12) {
 
-                    Text(stage.title)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.92))
-                        .multilineTextAlignment(.leading)
+            HStack(alignment: .top, spacing: 12) {
 
-                    Spacer()
+                Text("\(number)")
+                    .font(.headline)
+                    .frame(
+                        width: 32,
+                        height: 32
+                    )
+                    .background(
+                        Circle()
+                            .fill(Color.accentColor.opacity(0.15))
+                    )
 
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                }
-                .contentShape(Rectangle())
+                Text(title)
+                    .font(.headline)
+                    .padding(.top, 5)
             }
-            .buttonStyle(.plain)
 
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 9) {
-                    Text(stage.whatHappened)
-                        .aboutBody()
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("EQUATION")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.secondary)
-                        Text(stage.equation)
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(.cyan)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("WHY IT MATTERS")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.secondary)
-                        Text(stage.whyItMatters)
-                            .aboutBody()
-                    }
-                }
-                .padding(.top, 10)
-                .padding(.leading, 36)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
+            Text(text)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
-        .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 13))
-        .overlay(
-            RoundedRectangle(cornerRadius: 13)
-                .stroke(.white.opacity(0.08), lineWidth: 1)
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.secondary.opacity(0.08))
         )
     }
 }
-
-// MARK: - Shared text style
-
-private extension View {
-    func aboutBody() -> some View {
-        self
-            .font(.system(size: 11.5, weight: .regular, design: .rounded))
-            .foregroundStyle(.white.opacity(0.82))
-            .fixedSize(horizontal: false, vertical: true)
-    }
-}
-
-// MARK: - Preview
 
 #Preview {
-    AboutView(engine: PeptideAssemblyEngine())
+    AboutView()
 }
+

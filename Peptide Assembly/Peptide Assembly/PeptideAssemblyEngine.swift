@@ -8,6 +8,23 @@ import SwiftUI
 import SceneKit
 
 final class PeptideAssemblyEngine: ObservableObject {
+    
+    @Published var qrtlTransitionProbability: Double = 0.0
+    @Published var controlTransitionProbability: Double = 0.0
+    @Published var deltaP: Double = 0.0
+
+  
+    
+    @Published var qrtlEnergy: Double = 0.0
+    @Published var field: Double = 0.0
+    @Published var localField: Double = 0.0
+    @Published var phaseFactor: Double = 0.0
+    @Published var localEnergyDensity: Double = 0.0
+    
+    @Published var normalizedActivation: Double = 0.0
+    @Published var chemicalEnergyKJPerMol: Double = 0.0
+    @Published var chemicalEnergyEV: Double = 0.0
+    @Published var chemicalEnergyJoulesPerMolecule: Double = 0.0
 
     // Controlled inputs.
     // These are dimensionless model controls until experimentally calibrated.
@@ -29,8 +46,7 @@ final class PeptideAssemblyEngine: ObservableObject {
     @Published private(set) var aminoAcids: [AminoAcidUnit] = []
 
     @Published private(set) var fieldValue = 0.0
-    @Published private(set) var qrtlEnergy = 0.0
-    @Published private(set) var chemicalEnergy = 0.0
+     @Published private(set) var chemicalEnergy = 0.0
     @Published private(set) var effectiveEnergy = 0.0
     @Published private(set) var transitionProbability = 0.0
     @Published private(set) var foldingEnergy = 0.0
@@ -277,11 +293,15 @@ final class PeptideAssemblyEngine: ObservableObject {
             analogy: "The orchestra reaches a stable interpretation."
         ),
         PeptideStage(
-            number: "27", title: "QRTL Control Comparison",
+            number: "27",
+            title: "QRTL Control Comparison",
             equation: "ΔP = P(I_QRTL,f_QRTL,C) − P(0,f_QRTL,C)",
-            whatHappened: "The model compares the predicted transition probability with QRTL enabled against the corresponding control.",
-            whyItMatters: "A causal claim requires a control comparison rather than observing a single successful run.",
-            analogy: "The same passage is played with and without the conductor's timing signal."
+            whatHappened:
+                "The completed Gly4 peptide backbone is evaluated with QRTL enabled and compared with the corresponding QRTL-off control. Backbone: NH2–CH2–CO–NH–CH2–CO–NH–CH2–CO–NH–CH2–COOH",
+            whyItMatters:
+                "The same molecular structure is compared under QRTL-enabled and control conditions so the modeled change in transition probability can be measured.",
+            analogy:
+                "The same structure is tested with and without the QRTL timing signal."
         ),
         PeptideStage(
             number: "28", title: "Experimental Prediction",
@@ -337,7 +357,259 @@ final class PeptideAssemblyEngine: ObservableObject {
         statusMessage = "QRTL is currently off. The control condition is established."
         recalculate()
     }
+    private func determineBondFormation(
+        positionA: SIMD3<Double>,
+        positionB: SIMD3<Double>,
+        orientationA: SIMD3<Double>,
+        orientationB: SIMD3<Double>,
+        idealDistance: Double,
+        chemicalDeltaG: Double,
+        localEnergyDensity: Double,
+        localQRTLField: Double,
+        coherence: Double,
+        phaseDifference: Double,
+        candidateResonance: Double,
+        reactantResonance: Double,
+        temperatureEnergy: Double = 1.0,
+        minimumProbability: Double = 0.50
+    ) -> BondEvaluation {
 
+        // --------------------------------------------------------
+        // 1. DISTANCE
+        // --------------------------------------------------------
+
+        let delta = positionB - positionA
+        let distance = simd_length(delta)
+
+        let safeIdealDistance = max(idealDistance, 0.0000001)
+
+        let distanceFactor = max(
+            0.0,
+            min(
+                1.0,
+                1.0 - abs(distance - safeIdealDistance) / safeIdealDistance
+            )
+        )
+
+        // --------------------------------------------------------
+        // 2. ORIENTATION
+        // --------------------------------------------------------
+
+        let normalizedA =
+            simd_length(orientationA) > 0.0000001
+            ? simd_normalize(orientationA)
+            : SIMD3<Double>(0, 0, 0)
+
+        let normalizedB =
+            simd_length(orientationB) > 0.0000001
+            ? simd_normalize(orientationB)
+            : SIMD3<Double>(0, 0, 0)
+
+        let directionAB =
+            distance > 0.0000001
+            ? delta / distance
+            : SIMD3<Double>(0, 0, 0)
+
+        let orientationAAlignment =
+            simd_dot(normalizedA, directionAB)
+
+        let orientationBAlignment =
+            simd_dot(normalizedB, -directionAB)
+
+        let orientation = max(
+            0.0,
+            min(
+                1.0,
+                (orientationAAlignment + orientationBAlignment) / 2.0
+            )
+        )
+
+        // --------------------------------------------------------
+        // 3. PHASE
+        // --------------------------------------------------------
+
+        let phaseFactor = max(
+            0.0,
+            min(
+                1.0,
+                (1.0 + cos(phaseDifference)) / 2.0
+            )
+        )
+
+        // --------------------------------------------------------
+        // 4. COHERENCE
+        // --------------------------------------------------------
+
+        let boundedCoherence = max(
+            0.0,
+            min(1.0, coherence)
+        )
+
+        // --------------------------------------------------------
+        // 5. QRTL ENERGY CONTRIBUTION
+        // --------------------------------------------------------
+
+        let deltaEQRTL =
+            reactantResonance - candidateResonance
+
+        // --------------------------------------------------------
+        // 6. EFFECTIVE FREE ENERGY
+        // --------------------------------------------------------
+
+        let effectiveDeltaG =
+            chemicalDeltaG + deltaEQRTL
+
+        // --------------------------------------------------------
+        // 7. TRANSITION PROBABILITY
+        // --------------------------------------------------------
+
+        let safeTemperatureEnergy =
+            max(temperatureEnergy, 0.0000001)
+
+        let transitionProbability =
+            1.0 /
+            (
+                1.0 +
+                exp(
+                    effectiveDeltaG /
+                    safeTemperatureEnergy
+                )
+            )
+
+        // --------------------------------------------------------
+        // 8. PHYSICAL GATES
+        // --------------------------------------------------------
+
+        let distanceGate =
+            distanceFactor >= 0.65
+
+        let orientationGate =
+            orientation >= 0.70
+
+        let probabilityGate =
+            transitionProbability >= minimumProbability
+
+        // --------------------------------------------------------
+        // 9. FINAL BOND DECISION
+        // --------------------------------------------------------
+
+        let accepted =
+            distanceGate &&
+            orientationGate &&
+            probabilityGate
+
+        // --------------------------------------------------------
+        // 10. FAILURE REASON
+        // --------------------------------------------------------
+
+        let failureReason: String?
+
+        if accepted {
+            failureReason = nil
+        } else if !distanceGate {
+            failureReason = "Distance outside bonding range."
+        } else if !orientationGate {
+            failureReason = "Insufficient molecular orientation."
+        } else if !probabilityGate {
+            failureReason = "Transition probability below threshold."
+        } else {
+            failureReason = "Bond formation conditions not satisfied."
+        }
+
+        // --------------------------------------------------------
+        // 11. RETURN EXISTING BondEvaluation
+        // --------------------------------------------------------
+
+        return BondEvaluation(
+            formed: accepted,
+            failureReason: failureReason
+        )
+    }
+    private func calculateQRTLControlComparison() {
+
+        // Probability with the current QRTL state
+        qrtlTransitionProbability = transitionProbability
+
+        // Control:
+        // temporarily remove the QRTL energy contribution
+        // while keeping the same molecular/chemical state.
+        let savedQRTLEnergy = qrtlEnergy
+
+        qrtlEnergy = 0.0
+
+        // Recalculate the transition probability using
+        // the engine's existing calculation.
+        calculateTransition()
+
+        controlTransitionProbability = transitionProbability
+
+        // Restore QRTL state
+        qrtlEnergy = savedQRTLEnergy
+
+        // Restore the QRTL-enabled probability
+        transitionProbability = qrtlTransitionProbability
+
+        deltaP =
+            qrtlTransitionProbability -
+            controlTransitionProbability
+
+        print("""
+        
+        ===== QRTL CONTROL COMPARISON =====
+        QRTL enabled P = \(qrtlTransitionProbability)
+        Control P      = \(controlTransitionProbability)
+        ΔP             = \(deltaP)
+        ====================================
+        
+        """)
+    }
+    func updateChemicalEnergy() {
+
+        let density = max(0.0, localEnergyDensity)
+        let field = max(0.0, localField)
+        let coherent = min(1.0, max(0.0, coherence))
+        let phase = min(1.0, max(0.0, phaseFactor))
+
+        // Raw QRTL coupling
+        let rawActivation =
+            density
+            * field
+            * coherent
+            * phase
+
+        // Calibration scale.
+        // This converts the raw CA/QRTL quantity into
+        // a bounded chemical-bond activation.
+        let normalizationScale = 1.0
+
+        normalizedActivation = min(
+            1.0,
+            max(
+                0.0,
+                rawActivation / normalizationScale
+            )
+        )
+
+        // Chemical-energy reference scale.
+        // Units: kJ/mol
+        let referenceBondEnergyKJPerMol = 350.0
+
+        chemicalEnergyKJPerMol =
+            normalizedActivation
+            * referenceBondEnergyKJPerMol
+
+        // 1 eV = 96.4853 kJ/mol
+        chemicalEnergyEV =
+            chemicalEnergyKJPerMol
+            / 96.4853
+
+        // Convert kJ/mol → J/molecule
+        let avogadro = 6.02214076e23
+
+        chemicalEnergyJoulesPerMolecule =
+            (chemicalEnergyKJPerMol * 1000.0)
+            / avogadro
+    }
     func previousStage() {
         stageIndex = max(0, stageIndex - 1)
         applyStage()
@@ -360,39 +632,129 @@ final class PeptideAssemblyEngine: ObservableObject {
     // MARK: Pipeline calculations
 
     private func applyStage() {
+
         switch stageIndex {
-        case 0: controlOff()
-        case 1: applyCurrent()
-        case 2: establishResonance()
-        case 3: calculateField()
-        case 4: calculateQRTLEnergy()
-        case 5: calculateChemicalEnergy()
-        case 6: calculateEffectiveEnergy()
-        case 7: evolveCA()
-        case 8: organizeAtoms()
-        case 9: formFunctionalGroups()
-        case 10: formAminoAcids()
-        case 11: orientAminoAcids()
-        case 12: calculateChemicalDeltaG()
-        case 13: calculateQRTLDeltaE()
-        case 14: calculateEffectiveDeltaG()
-        case 15: calculateTransition()
-        case 16: calculateCoherence()
-        case 17: attemptCoupling()
-        case 18: recordCondensation()
-        case 19: growChain()
-        case 20: repeatCycle()
-        case 21: completeSequence()
-        case 22: conformationalSearch()
-        case 23: rankConformations()
-        case 24: fold()
-        case 25: stabilize()
-        case 26: compareControl()
-        case 27: prepareExperimentalPrediction()
-        default: break
+
+        case 0:
+            controlOff()
+            updateChemicalEnergy()
+
+        case 1:
+            applyCurrent()
+            updateChemicalEnergy()
+
+        case 2:
+            establishResonance()
+            updateChemicalEnergy()
+
+        case 3:
+            calculateField()
+            updateChemicalEnergy()
+
+        case 4:
+            calculateQRTLEnergy()
+            updateChemicalEnergy()
+
+        case 5:
+            calculateChemicalEnergy()
+            updateChemicalEnergy()
+
+        case 6:
+            calculateEffectiveEnergy()
+            updateChemicalEnergy()
+
+        case 7:
+            evolveCA()
+            updateChemicalEnergy()
+
+        case 8:
+            organizeAtoms()
+            updateChemicalEnergy()
+
+        case 9:
+            formFunctionalGroups()
+            updateChemicalEnergy()
+
+        case 10:
+            formAminoAcids()
+            updateChemicalEnergy()
+
+        case 11:
+            orientAminoAcids()
+            updateChemicalEnergy()
+
+        case 12:
+            calculateChemicalDeltaG()
+            updateChemicalEnergy()
+
+        case 13:
+            calculateQRTLDeltaE()
+            updateChemicalEnergy()
+
+        case 14:
+            calculateEffectiveDeltaG()
+            updateChemicalEnergy()
+
+        case 15:
+            calculateTransition()
+            updateChemicalEnergy()
+
+        case 16:
+            calculateCoherence()
+            updateChemicalEnergy()
+
+        case 17:
+            attemptCoupling()
+            updateChemicalEnergy()
+
+        case 18:
+            recordCondensation()
+            updateChemicalEnergy()
+
+        case 19:
+            growChain()
+            updateChemicalEnergy()
+
+        case 20:
+            repeatCycle()
+            updateChemicalEnergy()
+
+        case 21:
+            completeSequence()
+            updateChemicalEnergy()
+
+        case 22:
+            conformationalSearch()
+            updateChemicalEnergy()
+
+        case 23:
+            rankConformations()
+            updateChemicalEnergy()
+
+        case 24:
+            fold()
+            updateChemicalEnergy()
+
+        case 25:
+            stabilize()
+            updateChemicalEnergy()
+
+        case 26:
+            calculateQRTLControlComparison()
+            compareControl()
+            updateChemicalEnergy()
+
+        case 27:
+            prepareExperimentalPrediction()
+            updateChemicalEnergy()
+
+        default:
+            break
         }
+
         recalculate()
     }
+
     private func calculateCoherence() {
         guard cells.count >= 2 else {
             coherence = 0.0
@@ -1675,39 +2037,65 @@ final class PeptideAssemblyEngine: ObservableObject {
     }
 
     private func completeSequence() {
-        // For a controlled demonstration, each bond is evaluated independently.
-        // We do not silently force success: the result depends on the same
-        // transition calculation.
+
         var successful = 0
 
         if aminoAcids.count > 1 {
+
             for i in 0..<(aminoAcids.count - 1) {
+
                 let left = aminoAcids[i]
                 let right = aminoAcids[i + 1]
-                let d = right.position - left.position
-                let distance = simd_length(d)
-                let distanceFactor = exp(-pow((distance - 1.20) / 0.45, 2.0))
-                let direction = distance > 0 ? d / distance : SIMD3<Double>(1,0,0)
-                let orientationFactor = 0.5 + 0.5 * max(-1.0, min(1.0, simd_dot(left.orientation, direction)))
-                let dg = chemicalBondScale
-                    + distancePenalty * (1 - distanceFactor)
-                    + orientationPenalty * (1 - orientationFactor)
-                    - qrtlCurrent * qrtlEnergyCoupling * coherence * (1 - orientationFactor)
 
-                let p = 1 / (1 + exp(max(-60, min(60, dg / modelKBT))))
+                // Existing QRTL quantities
+                let localQRTLField = qrtlCurrent
 
-                if p >= 0.50 && orientationFactor >= 0.70 && distanceFactor >= 0.65 {
+                let phaseDifference = 0.0
+
+                let candidateResonance =
+                    qrtlCurrent *
+                    qrtlEnergyCoupling *
+                    (0.5 + 0.5 * coherence)
+
+                let reactantResonance =
+                    qrtlCurrent *
+                    qrtlEnergyCoupling *
+                    (0.5 + 0.5 * coherence)
+
+                let evaluation = determineBondFormation(
+                    positionA: left.position,
+                    positionB: right.position,
+                    orientationA: left.orientation,
+                    orientationB: right.orientation,
+                    idealDistance: 1.20,
+                    chemicalDeltaG: chemicalBondScale,
+                    localEnergyDensity: localEnergyDensity,
+                    localQRTLField: localQRTLField,
+                    coherence: coherence,
+                    phaseDifference: phaseDifference,
+                    candidateResonance: candidateResonance,
+                    reactantResonance: reactantResonance,
+                    temperatureEnergy: modelKBT,
+                    minimumProbability: 0.50
+                )
+
+                if evaluation.formed {
                     successful += 1
                     aminoAcids[i].bondedToNext = true
+                } else {
+                    aminoAcids[i].bondedToNext = false
                 }
             }
         }
 
         peptideBondCount = successful
         peptideLength = successful + 1
-        statusMessage = "Sequence evaluation complete: \(successful) of \(max(0, aminoAcids.count - 1)) modeled couplings accepted."
-    }
 
+        statusMessage =
+            "Sequence evaluation complete: " +
+            "\(successful) of \(max(0, aminoAcids.count - 1)) " +
+            "modeled couplings accepted."
+    }
     private func conformationalSearch() {
         guard !aminoAcids.isEmpty else { return }
         foldingEnergy = conformationEnergy(for: aminoAcids)
@@ -1749,7 +2137,43 @@ final class PeptideAssemblyEngine: ObservableObject {
         transitionProbability = on
         statusMessage = String(format: "Control comparison: P(QRTL on)=%.4f, P(control)=%.4f, ΔP=%.4f.", on, off, on - off)
     }
+   
+    private func calculateChemicalBondEnergy(
+        localEnergyDensity: Double,
+        localField: Double,
+        coherence: Double,
+        phaseFactor: Double
+    ) -> Double {
 
+        let normalizedEnergy =
+            calculateNormalizedBondEnergy(
+                localEnergyDensity: localEnergyDensity,
+                localField: localField,
+                coherence: coherence,
+                phaseFactor: phaseFactor
+            )
+
+        return ChemicalEnergyCalibration.kJPerMol(
+            fromNormalizedBondEnergy: normalizedEnergy
+        )
+    }
+    private func calculateNormalizedBondEnergy(
+        localEnergyDensity: Double,
+        localField: Double,
+        coherence: Double,
+        phaseFactor: Double
+    ) -> Double {
+
+        let density = max(0.0, localEnergyDensity)
+        let field = max(0.0, localField)
+        let coherent = min(1.0, max(0.0, coherence))
+        let phase = min(1.0, max(0.0, phaseFactor))
+
+        return density
+            * field
+            * coherent
+            * phase
+    }
     private func prepareExperimentalPrediction() {
         statusMessage =
             "Prediction to test: varying controlled QRTL current/resonance should change measured transition kinetics if the proposed QRTL coupling is physically real."

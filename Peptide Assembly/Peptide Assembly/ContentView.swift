@@ -132,26 +132,43 @@ import Combine
 // MARK: - ContentView
 
 struct ContentView: View {
+    @State private var showingAbout = false
     @StateObject private var engine = PeptideAssemblyEngine()
     @State private var showingBondFailureAlert = false
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            QRTLPeptideSceneView(engine: engine)
-                .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                header
-                Spacer()
-                informationPanel
-                controls
+        NavigationStack{
+            ZStack {
+                Color.black.ignoresSafeArea()
+                
+                QRTLPeptideSceneView(engine: engine)
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    header
+                    Spacer()
+                    informationPanel
+                    controls
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 10)
+                .padding(.bottom, 12)
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 10)
-            .padding(.bottom, 12)
+            .toolbar {
+                           ToolbarItem(placement: .topBarTrailing) {
+                               Button {
+                                   showingAbout = true
+                               } label: {
+                                   Image(systemName: "info.circle")
+                               }
+                               .accessibilityLabel("About")
+                           }
+                       }
         }
+       
+                   .sheet(isPresented: $showingAbout) {
+                       AboutView()
+                   }
         .preferredColorScheme(.dark)
         .onAppear { engine.start() }
         .onReceive(engine.$bondFailureMessage) { message in
@@ -236,6 +253,33 @@ struct ContentView: View {
                     metric("Effective Energy", engine.effectiveEnergy, "%.4f")
                     metric("Transition Probability", engine.transitionProbability, "%.4f")
                 }
+
+                HStack(spacing: 10) {
+                    metric(
+                        "QRTL Activation",
+                        engine.normalizedActivation,
+                        "%.5f"
+                    )
+
+                    metric(
+                        "Chemical Energy (kJ/mol)",
+                        engine.chemicalEnergyKJPerMol,
+                        "%.3f"
+                    )
+
+                    metric(
+                        "Chemical Energy (eV)",
+                        engine.chemicalEnergyEV,
+                        "%.5f"
+                    )
+
+                    metric(
+                        "Energy / Molecule (J)",
+                        engine.chemicalEnergyJoulesPerMolecule,
+                        "%.4e"
+                    )
+                }
+
 
                 HStack(spacing: 10) {
                     metric("Atoms", Double(engine.organizedAtomCount), "%.0f")
