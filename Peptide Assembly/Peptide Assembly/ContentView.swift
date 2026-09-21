@@ -1,127 +1,467 @@
+
 /*
+The current peptide-assembly model can be understood as a controlled molecular
+workshop in which a peptide is assembled inside a computational environment.
+The peptide is the object being constructed, the cellular automaton is the
+workshop floor surrounding it, the QRTL drive is a controllable source of
+modeled excitation, and the local QRTL field represents the influence that
+the driven lattice produces around the molecular structure. The important
+feature of the current implementation is that these components are not
+completely independent demonstrations. They are connected through explicit
+state variables and calculations. The molecular configuration influences the
+cellular automaton, the cellular automaton provides local quantities used by
+the QRTL calculations, the QRTL drive changes the modeled QRTL current and
+field, and those quantities participate in the local transition calculation
+used to determine whether the modeled peptide coupling condition is satisfied.
+At the same time, the current implementation should be understood as a
+computational model rather than as an experimentally established description
+of molecular physics. Several quantities have not been assigned physical SI
+units, and the QRTL relationships remain model assumptions unless they are
+independently derived or experimentally validated.
 
- The peptide pipeline begins with the complete molecular definition. The system first establishes the peptide sequence, identifies every amino acid residue, identifies the peptide bonds connecting the residues, identifies the atoms belonging to every residue, establishes the termini, assigns the molecular coordinates, and records the connectivity between all atoms. The starting molecular structure becomes the canonical molecular state. Every subsequent stage operates on this same structure so that geometry, energy, resonance, tunneling, and reaction calculations remain connected. The pipeline does not create separate molecular representations for different calculations.
+The process begins with a controlled initial condition. The QRTL current starts
+at zero, the QRTL field is initially absent, and the QRTL energy contribution
+is initially zero. This starting condition is important because it provides a
+control state. In the workshop analogy, this is equivalent to setting up the
+molecular assembly bench before turning on the special power source. The
+peptide environment can therefore be examined first without a QRTL drive and
+then examined again with the drive enabled. This distinction becomes
+particularly important later when the model compares QRTL-on and QRTL-off
+conditions. A zero QRTL contribution at the beginning is therefore not a
+statement that the chemical system contains no energy. It means that the
+specific QRTL contribution represented by the model has not yet been applied.
 
- The second stage establishes the three dimensional molecular geometry. Every atom receives a position in space, every bond receives its corresponding length and orientation, and every residue receives its local structural environment. The system identifies backbone atoms, side chains, hydrogen-bonding relationships, charged regions, polar regions, nonpolar regions, and other structural features represented by the model. The resulting geometry establishes the spatial framework in which every later QRTL calculation occurs.
+The molecular program currently consists of four glycine residues. The
+programmed sequence is Gly-Gly-Gly-Gly, and the model constructs the
+corresponding amino-acid units as the assembly progresses. Each glycine is
+represented by the modeled structure NH2–CH2–COOH. The residues are assigned
+positions within the computational coordinate system and are subsequently
+oriented relative to their neighboring residues. In the workshop analogy,
+these four glycines are four molecular components placed on the assembly
+bench in the order in which they are intended to become connected. The model
+does not begin by randomly inventing a peptide. Instead, it has a programmed
+molecular sequence and progressively evaluates the conditions required to
+connect those components.
 
- The third stage establishes the molecular coordinate system. The peptide is placed into a defined three dimensional coordinate space, and the coordinate system is used consistently by the molecular lattice, energy shell, twister field, visualization, and transition calculations. The system determines the spatial extent of the peptide and creates the computational region surrounding it. The computational region must extend beyond the molecular surface because the modeled energy shell and QRTL field exist around the peptide rather than only at the atomic coordinates.
+Surrounding the molecular components is a cellular-automaton lattice. The
+current implementation creates a 5 × 5 × 3 lattice containing 75 cells. Each
+cell represents a local computational region and stores quantities such as
+position, energy, density, QRTL field, phase, coherence, twist speed, twist
+current, energy flow, bonding availability, and cellular state. The lattice is
+therefore the computational environment in which the local model evolves.
+Instead of treating the entire peptide as one mathematical point with one
+energy and one phase, the model distributes state information across many
+locations. In the workshop analogy, the lattice is the floor and surrounding
+workspace of the molecular assembly bench. Each section of the workspace can
+have its own local conditions, and neighboring sections can exchange modeled
+information.
 
- The fourth stage creates the molecular lattice. The computational volume is divided into connected locations surrounding and intersecting the peptide. Each lattice location stores the local quantities required by the QRTL model. These quantities include local energy, density, phase, rotational state, twist-current, energy flow, coupling, resonance state, and neighboring relationships. The lattice provides the continuous computational environment through which the modeled QRTL state evolves.
+The lattice is initialized before the QRTL drive is applied. Each cell begins
+with its defined position and initial state. Neighbor relationships are
+determined from spatial separation, allowing nearby cells to participate in
+the cellular-automaton and neighbor-flow calculations. This means that the
+lattice has spatial structure rather than being simply a list of unrelated
+numbers. A change occurring in one region can therefore influence neighboring
+regions through the rules implemented by the model. The computational
+environment is consequently capable of representing localized conditions
+rather than only one global molecular state.
 
- The fifth stage maps the peptide onto the lattice. Atomic positions are transferred into nearby lattice locations, and the influence of each atom and residue is distributed according to the spatial rules of the model. Regions containing molecular matter receive corresponding structural information. Empty regions remain part of the computational field because they provide the space through which the modeled QRTL field propagates. This prevents the calculation from becoming limited to the atoms themselves.
+The QRTL drive is controlled through the modeled QRTL current. The default
+drive amplitude is currently 6.0, while the actual QRTL current begins at
+zero. Applying the drive causes the model to calculate a nonzero QRTL current
+and subsequently a QRTL field. This is one of the most important causal
+relationships in the current implementation. The drive is not itself the
+bond, and it does not directly declare that a peptide bond exists. Instead,
+the drive provides an input that propagates through the model. In the
+workshop analogy, turning the power source to level 6 does not automatically
+assemble the molecular components. It supplies the operating condition from
+which the local machinery calculates whether coupling can occur.
 
- The sixth stage calculates local molecular density. The system determines how much molecular structure is present around each lattice location. Density is influenced by the locations of atoms and the spatial distribution of the peptide. The density field becomes one of the inputs to the QRTL field. High-density molecular regions and low-density surrounding regions therefore produce different local field conditions.
+The modeled QRTL field depends on several factors. The current implementation
+uses QRTL current, QRTL field gain, global coherence, a resonance-response
+factor, and spatial distance from the selected field center. The field is
+therefore not simply assigned as one identical value throughout the lattice.
+Instead, the field is spatially distributed. Cells closer to the modeled
+field center receive a stronger contribution while cells farther away receive
+a reduced contribution according to the spatial response implemented in the
+code. This gives the simulation a localized field structure.
 
- The seventh stage constructs the energy shell. The local molecular density is converted into the initial energy-shell distribution according to the model's defined relationship. The energy shell surrounds the molecular structure and provides the spatial field in which the subsequent QRTL calculations occur. The shell is continuously updated when the peptide moves or when its internal state changes. It therefore represents the current molecular environment rather than a fixed background.
+The resonance response in the current implementation should be interpreted
+carefully. The model contains a resonanceFrequency input and compares it with
+a reference frequency to generate a response factor. That response controls
+how strongly the QRTL current contributes to the modeled field. It is useful
+for studying the behavior of the simulation under different resonance
+conditions, but it is not currently a derivation of a physical molecular
+resonance spectrum. The code therefore has a resonance-dependent response,
+but that should not be confused with having independently calculated the
+physical resonance frequencies of glycine or a peptide.
 
- The eighth stage establishes the local energy state. Each lattice location receives an initial energy value based on the molecular configuration, local density, neighboring structure, and the energy-shell rules. The system distinguishes local energy from total molecular energy. Local energy belongs to individual regions of the computational field, while total energy is obtained by integrating or aggregating the relevant local contributions.
+Once the QRTL field exists, the model calculates local QRTL energy. The
+current implementation combines the local QRTL field with cell coherence,
+phase, density, and a QRTL energy coupling coefficient. The result is a
+modeled local QRTL energy contribution. The important distinction is that
+this quantity is currently a simulation quantity rather than a dimensionally
+calibrated physical energy. The code does not presently establish that the
+result is measured in joules, electron-volts, or kilojoules per mole. The
+energy terminology describes the role of the quantity within the model, but
+the numerical value should not automatically be interpreted as a laboratory
+measurement.
 
- The ninth stage initializes the quark-twister field. Each relevant lattice location receives a modeled rotational state. The state contains a rotational magnitude, rotational direction, phase, and associated local energy or twist-current. The twister field is connected to the molecular lattice rather than being an independent visualization layer. A change in the molecular environment therefore changes the conditions experienced by the local twister states.
+Chemical energy is calculated separately. The current chemical-energy
+calculation uses the modeled density and bonding-availability state of the
+cells. QRTL energy and chemical energy are then combined to produce the
+modeled effective molecular energy. This separation is important because it
+allows the simulation to ask a specific question: what happens to the modeled
+molecular state when a QRTL contribution is present compared with the
+condition in which that contribution is removed? In the workshop analogy,
+chemical energy describes the ordinary molecular assembly conditions, while
+QRTL energy represents the additional modeled influence produced by the
+special operating field.
 
- The tenth stage establishes the initial twister orientation. The model determines the starting rotational direction of each local twister according to the molecular geometry and initialization rules. Neighboring locations are given related but not necessarily identical orientations. This allows the model to begin with a distributed rotational field rather than assuming that the entire peptide is initially perfectly synchronized.
+The cellular automaton then evolves. Each cell examines its previous state and
+the states of its neighbors and generates a new state. The implementation
+uses synchronous evolution, meaning that the new state is calculated from the
+previous lattice state rather than allowing an early-updated cell to
+immediately modify another cell during the same update. Local energy,
+density, coherence, phase, and neighboring information participate in this
+process. This is important because it creates an actual evolving cellular
+system rather than a static grid used only for visualization.
 
- The eleventh stage establishes twister magnitude. Each local rotational state receives a magnitude representing the strength of its modeled rotational activity. Magnitude can vary across the molecular structure according to density, energy, resonance conditions, and local interactions. The magnitude is subsequently allowed to evolve rather than remaining permanently fixed.
+Neighbor-flow processing provides another connection between cells. The
+current implementation examines pairs of neighboring cells and calculates
+modeled flow from differences in their twist speeds. Opposing changes are
+applied to the two participating cells. The model then compares the aggregate
+twist-speed quantity before and after the update and reports a global
+flow-conservation error. In the workshop analogy, this is similar to
+circulation between adjacent sections of the workspace: if one region sends
+modeled rotational influence toward another, the receiving and sending
+regions receive corresponding updates.
 
- The twelfth stage establishes the initial phase field. Every active lattice location receives a phase value. Phase is treated as a continuously evolving state that can differ between neighboring locations. The initial phase distribution provides the starting condition for the synchronization calculation.
+However, the current neighbor-flow conservation calculation should not be
+interpreted as proof that physical energy is conserved. What the implementation
+currently checks is conservation of the particular modeled aggregate
+twist-speed quantity used by the flow calculation. A physically meaningful
+energy-conservation law would require a dimensionally defined energy variable,
+an explicit energy-transport equation, and appropriate source, sink, and
+boundary terms. The distinction is important because numerical conservation
+of one model variable does not automatically establish conservation of a
+physical quantity.
 
- The thirteenth stage identifies neighboring lattice locations. Each lattice point is connected to the surrounding locations defined by the model. The system determines which neighboring cells contribute to local flow, phase comparison, energy exchange, and twister interaction. Neighbor relationships remain consistent throughout the calculation unless the lattice itself is intentionally rebuilt.
+After the lattice has evolved, the model organizes the cells into molecular
+states. Atomic organization assigns modeled elemental states to lattice cells,
+and subsequent stages identify functional groups and form the programmed
+amino-acid units. These stages transform the initially generic computational
+cells into a representation of the intended molecular assembly. The result
+is still a model representation rather than an atom-by-atom quantum chemical
+calculation.
 
- The fourteenth stage calculates neighbor phase differences. The phase of each location is compared with the phases of its connected neighbors. The resulting differences establish the local phase-disagreement field. A region in which neighboring phases are similar has low phase error, while a region with large phase differences has high phase error.
+The glycine residues are then positioned and oriented. The current model
+places the four residues in a linear arrangement and determines the orientation
+of each residue relative to the following residue. This means that the model
+can determine whether a residue points in a compatible direction for the
+candidate connection. It is important to distinguish this from a complete
+atomistic rotational description. The orientation currently represents the
+relationship between residues; it does not yet calculate every rotational
+degree of freedom of every NH2, CH2, and COOH group.
 
- The fifteenth stage calculates neighbor twist-current. The system determines the directional transfer of modeled rotational information between neighboring locations. The twist-current depends on the local twister states and their differences from neighboring states. The current establishes a mechanism by which rotational information can propagate through the lattice.
+The central transition calculation occurs when the model evaluates whether two
+neighboring amino-acid units satisfy the conditions required for the modeled
+peptide coupling. The current implementation uses the Gly1-to-Gly2 transition
+as the primary controlled bond-formation test. Several factors participate in
+this calculation, including residue distance, residue orientation, local
+energy density, local QRTL field, phase difference, coherence, QRTL current,
+pressure-like balance, and model-defined coupling parameters.
 
- The sixteenth stage calculates local energy flow. Energy movement between neighboring locations is evaluated from the local energy states and the defined QRTL flow rules. The system determines incoming and outgoing flow at every location. This produces a local energy-flow field rather than treating every lattice point as energetically isolated.
+Distance is treated as an important geometric condition. The implementation
+uses a Gaussian-like distance response centered on the preferred modeled
+separation. When the residues are near the preferred distance, the distance
+factor becomes stronger. When they move farther away, the factor decreases.
+Orientation is handled separately. The orientation of one residue is compared
+with the direction toward the other residue, producing an orientation
+compatibility factor. In the workshop analogy, this is similar to two
+components needing to be close enough and facing the correct way before a
+joining mechanism can engage.
 
- The seventeenth stage applies local conservation. Incoming and outgoing modeled flow are compared at each lattice location. The difference represents local accumulation or depletion unless the location contains an explicitly represented source, sink, boundary interaction, or reaction event. This prevents the lattice from generating arbitrary energy without a corresponding mechanism in the model.
+The QRTL current calculation then combines several conditions. The QRTL drive
+amplitude is modified by distance compatibility, orientation compatibility,
+coherence, phase alignment, pressure balance, and the modeled transported
+energy condition. The resulting value represents the QRTL current available
+to the candidate transition. This is an important feature because it prevents
+the drive amplitude from being treated as the only determining factor. A
+large drive does not automatically guarantee successful coupling if the
+geometric or phase conditions are unfavorable.
 
- The eighteenth stage establishes boundary conditions. The system determines how twist-current, energy flow, phase, and the QRTL field behave at the computational boundaries. The boundary rules prevent artificial behavior at the edge of the lattice from being mistaken for molecular behavior. The same boundary conditions must be applied consistently during every iteration.
+The local QRTL field is then evaluated around the candidate bond. Instead of
+using only a global field value, the model examines the local region around
+the two residues and their midpoint. The local energy density and local field
+are combined with coherence and phase alignment to produce the current
+bond-formation score. The implemented relationship is:
 
- The nineteenth stage calculates the local phase-error field. The current phase of every region is compared with the phase required for the desired coherent state. The difference becomes the local phase error. This value is used by the phase-correction process and provides a direct measurement of how far the system is from phase synchronization.
+bondEnergy =
+    localEnergyDensity × localField × coherence × phaseFactor
 
- The twentieth stage calculates phase correction. The system uses local coupling, neighbor phase differences, twister state, and phase error to determine the direction and magnitude of phase correction. The correction moves the system toward compatibility rather than simply assigning a target phase. The correction is recalculated at every iteration.
+The name bondEnergy should be understood carefully. In the current
+implementation this is a model-defined bond-formation metric, not a calibrated
+chemical bond energy. The calculation does not currently establish units of
+joules, electron-volts, or kilojoules per mole. The quantity is nevertheless
+useful computationally because it provides a scalar measure that can be used
+to determine whether the modeled QRTL-assisted coupling condition is strong
+enough to pass the bond-formation gate.
 
- The twenty-first stage performs phase synchronization. Neighboring locations progressively move toward compatible rotational states. Synchronization is evaluated across the connected lattice rather than at one selected point. The system therefore distinguishes local synchronization from global synchronization.
+This also explains an important observation in the simulation. If the QRTL
+drive is zero, the QRTL current is zero. The calculated QRTL field consequently
+becomes zero, and because the bond-formation metric is multiplicative, the
+QRTL-derived bond score becomes zero. Therefore a measured zero at drive zero
+does not mean that the chemical bond has zero physical energy or that the
+molecular system is chemically free. It means that the QRTL-derived
+contribution represented by this particular metric is zero under the control
+condition.
 
- The twenty-second stage evaluates phase coherence. The model calculates how consistently the peptide's active regions maintain compatible phase relationships. Coherence increases when neighboring and connected regions remain phase-aligned and decreases when phase disorder develops. Coherence becomes an input to resonance and QRTL coupling.
+This distinction is similar to turning off a machine in the workshop. If the
+machine is switched off, its output is zero. That does not mean the material
+being worked on has no physical properties. It only means that the machine is
+not contributing its output at that moment. In the same way, a zero QRTL bond
+score indicates that the modeled QRTL contribution is absent. It does not
+measure the actual thermodynamic free energy of a peptide bond.
 
- The twenty-third stage evaluates phase closure. The system follows the relevant rotational pathway through the molecular lattice and determines whether the accumulated phase relationship returns to a compatible state. Closure requires the complete pathway to satisfy the defined phase condition. A local region cannot be considered globally closed merely because two neighboring points have similar phases.
+The model currently uses minimumBondEnergy = 0.10 as a bond-formation
+threshold. This threshold is a computational criterion. It tells the program
+how large the modeled bond-formation score must become before that particular
+gate can be satisfied. It is not a published peptide-bond energy and should
+not be interpreted as 0.10 eV, 0.10 joules, or any other physical energy unit.
+The threshold is therefore best understood as a model parameter that can be
+studied, varied, and eventually calibrated if a defensible physical mapping
+is developed.
 
- The twenty-fourth stage establishes the discrete resonance shells. The model determines which combinations of rotational state, phase, energy, and spatial configuration satisfy the resonance condition. These permitted states form discrete resonance shells within the continuous molecular field. The resonance shells identify the states in which the modeled QRTL system can maintain coherent oscillation.
+The candidate transition also includes pressure-like quantities. These are
+calculated from local energy density and local QRTL field and are used to
+evaluate whether the modeled local conditions are sufficiently balanced. These
+quantities currently function as computational pressure-like variables. They
+are not presently expressed as calibrated pascals or another physical pressure
+unit. Their role is to provide another local condition in the bond-formation
+decision.
 
- The twenty-fifth stage calculates resonance frequency. The local rotational state is converted into its corresponding modeled resonance frequency. The frequency is compared with the available molecular and QRTL energy states. Only states satisfying the defined resonance relationship contribute to the resonant population.
+Coherence is calculated from phase relationships. The current implementation
+uses a cosine-based phase relationship, so coherence increases when the
+relevant modeled phases become more closely aligned. Phase alignment also
+enters the QRTL current and bond calculations. A phase difference that produces
+a favorable cosine contributes positively, while an unfavorable relationship
+reduces or eliminates the positive contribution. This gives phase a direct
+computational role rather than making it merely a visualization parameter.
 
- The twenty-sixth stage calculates resonance energy. Each permitted resonance state receives its corresponding energy. The system compares this energy with the local energy available within the peptide's field. This determines whether a particular region can occupy the resonance shell.
+The candidate bond is accepted only when the required model gates are
+satisfied. These include pressure balance, minimum bond-formation score,
+minimum coherence, allowable phase difference, transition probability,
+orientation compatibility, and distance compatibility. This is analogous to
+a safety interlock in the molecular workshop. Several switches must be in the
+correct state before the coupling mechanism is permitted to engage. A strong
+QRTL drive alone does not bypass all of the other conditions.
 
- The twenty-seventh stage calculates resonance occupancy. The model determines how strongly each molecular region participates in the available resonance state. Occupancy depends on energy compatibility, phase coherence, local coupling, density, and the resonance condition. The occupancy field identifies where coherent QRTL behavior is strongest.
+The transition probability is calculated from a logistic relationship using
+the modeled effective transition energy. The effective transition quantity
+combines a chemical contribution with a QRTL contribution. The resulting
+number is a model probability used by the simulation's decision logic. It
+should not currently be interpreted as a directly measured chemical reaction
+probability or as a quantitatively validated kinetic prediction.
 
- The twenty-eighth stage performs resonance matching. Neighboring resonance states are compared to determine whether they can participate in a common coherent structure. Compatible states reinforce the resonant pathway, while incompatible states reduce the effective coherence. This produces a connected resonance network rather than a collection of unrelated resonance points.
+When a coupling attempt succeeds, the molecular state is updated. The peptide
+bond count increases, the participating residue is marked as bonded, and
+relevant lattice cells are assigned peptide-bond state information. The
+condensation and chain-growth stages then update the modeled representation of
+the peptide. These stages currently represent molecular assembly as state
+changes in the computational model. They do not yet simulate every atom,
+electron, orbital, solvent molecule, or reaction intermediate involved in a
+real peptide-condensation mechanism.
 
- The twenty-ninth stage calculates resonance propagation. Resonant information is propagated through neighboring regions according to the lattice connectivity. The system determines whether resonance remains localized or develops into a larger coherent pathway across the peptide.
+The programmed sequence can subsequently be completed by evaluating the
+adjacent glycine pairs. Successful modeled coupling determines the represented
+peptide length. This provides a clear computational progression from
+individual molecular units toward the Gly4 peptide representation.
 
- The thirtieth stage calculates QRTL coupling. Coupling is derived from the current phase relationship, resonance occupancy, twister alignment, neighbor connectivity, energy flow, and local molecular conditions. Stronger compatibility produces stronger effective coupling. Poor phase alignment and weak resonance participation reduce coupling.
+The model then applies a conformational stage. The current implementation
+assigns a modeled folded geometry to the glycine residues and calculates a
+conformation energy from residue positions, bond distances, environmental
+terms, and a QRTL contribution. This is useful for exploring how the modeled
+QRTL state changes the calculated conformational quantity, but it should not
+be described as a complete molecular-dynamics simulation or quantum-chemical
+conformational search. The present implementation does not yet search every
+possible molecular configuration and prove that the selected geometry is the
+global physical minimum.
 
- The thirty-first stage calculates coupling propagation. The local coupling values are transferred through the connected lattice so that a strongly coupled region can influence adjacent regions. This establishes the spatial extent of the QRTL interaction.
+Stabilization similarly represents a modeled stability assessment. The system
+recalculates the relevant quantities and evaluates the resulting state using
+the implemented criteria. This can identify a stable state according to the
+simulation's rules, but it is not equivalent to experimentally demonstrating
+that the actual peptide is thermodynamically stable.
 
- The thirty-second stage calculates the QRTL field. The coupled twister, resonance, phase, density, and energy states are combined to produce the current QRTL field. The field is spatially distributed around the peptide and changes as the molecular configuration changes.
+One of the most useful parts of the current architecture is the QRTL control
+comparison. The model evaluates the transition under the driven condition and
+then evaluates it again after setting QRTL current to zero. The resulting
+transition probabilities can be compared. This provides a direct computational
+experiment: hold the molecular model and relevant conditions as constant as
+possible, change the QRTL drive, and observe how the calculated transition
+condition changes.
 
- The thirty-third stage calculates the QRTL field gradient. The system determines how the QRTL field changes from one region to another. The gradient identifies the direction in which the modeled field changes most strongly and provides the basis for calculating its influence on the molecular energy landscape.
+This control experiment gives the model a much stronger structure than simply
+reporting a single successful bond. A single successful result does not show
+which part of the model caused the success. A controlled comparison can show
+whether the calculated transition changes when the QRTL contribution is
+removed. If the driven and control states produce different results, that
+difference becomes a measurable property of the simulation. It is still a
+model result, but it is a more informative model result because the variable
+being tested is explicitly controlled.
 
- The thirty-fourth stage calculates the QRTL binding contribution. The model determines how the coherent QRTL state contributes to the effective binding environment of the peptide. This contribution is derived from the current QRTL state rather than independently specified.
+The overall computational chain can therefore be understood as a workshop
+with feedback. The molecular components establish the initial arrangement.
+The lattice establishes the computational environment. The QRTL drive
+establishes an excitation input. The drive produces modeled current. The
+current produces a spatial field. The field contributes to local QRTL energy.
+Chemical and QRTL contributions combine into an effective modeled energy.
+The cellular automaton evolves local states and neighbor relationships.
+Molecular orientation and distance establish geometric compatibility.
+Coherence and phase establish synchronization conditions. The local QRTL field
+and energy density then contribute to the bond-formation score. The transition
+calculation determines whether the modeled coupling gates are satisfied. If
+the coupling succeeds, the molecular state changes, and the changed molecular
+state can alter the subsequent lattice and QRTL calculations.
 
- The thirty-fifth stage calculates effective molecular energy. The conventional molecular contributions represented by the model are combined with the QRTL contribution. The result is the effective energy landscape used by the subsequent stability, transition, and tunneling calculations.
+The key relationship is therefore not that QRTL energy directly creates a
+peptide bond. Instead, the current model represents QRTL as an influence on
+the local conditions under which the modeled transition is evaluated. The
+QRTL drive changes current. Current changes the field. The local field
+contributes to the bond-formation metric. Coherence and phase determine how
+effectively that contribution participates. Geometry determines whether the
+molecular components are positioned compatibly. The transition probability
+and gating rules then determine whether the simulated coupling is accepted.
 
- The thirty-sixth stage calculates the energy gradient. The system determines how effective energy varies throughout the molecular structure. Regions where energy changes rapidly become important for molecular transitions and tunneling because they represent portions of the energy landscape with significant energetic differences.
+The current model deliberately stops short of claiming that all of these
+quantities already correspond to experimentally measured physical quantities.
+The QRTL current, QRTL field, QRTL energy, chemical energy, effective energy,
+bond-formation score, pressure-like quantities, and transition probability are
+currently model quantities unless a dimensional calibration has been added.
+The resonanceFrequency is also currently a model input used in the field
+response rather than a frequency independently discovered from the cellular
+automaton.
 
- The thirty-seventh stage identifies energy barriers. The model determines the energetic barriers separating the current molecular configuration from possible alternative configurations. Each barrier is associated with a particular transition pathway rather than being treated as one universal peptide value.
+This distinction is especially important for interpreting numerical results.
+For example, if increasing the drive from zero to a nonzero value increases
+the bond-formation score, the simulation has demonstrated that the implemented
+equations produce that response. It has not yet demonstrated that a physical
+peptide in nature will respond by exactly the same numerical amount. The
+computational result establishes behavior within the model. Physical
+validation would require a defensible mapping from the model variables to
+measurable quantities and then comparison with experimental observations.
 
- The thirty-eighth stage identifies possible conformational transitions. The peptide geometry is examined for allowed structural changes. The system identifies which bonds, angles, residue relationships, or larger conformational arrangements can participate in the transition represented by the model.
+The current architecture therefore provides a framework for controlled
+hypothesis testing. One can vary the QRTL drive, phase, coherence, distance,
+orientation, coupling parameters, resonance input, and other model variables
+and observe how the calculated peptide-assembly outcome changes. The control
+condition provides a baseline. The driven condition provides the QRTL-assisted
+case. The difference between them can then be studied without confusing the
+QRTL contribution with the existence of the underlying chemical molecule.
 
- The thirty-ninth stage calculates the transition pathway. The model establishes the sequence of molecular states required to move from the starting configuration toward the target configuration. The pathway determines how the energy barrier evolves rather than assuming that the peptide jumps directly from one state to another.
+The workshop analogy also explains why the cellular automaton is important.
+The QRTL drive is like the power supplied to the workshop, but the power does
+not independently determine the final product. The lattice represents the
+workspace through which local interactions occur. Each cell is like a small
+station in the workspace. Neighboring stations communicate through the
+implemented flow and state-update rules. Phase represents coordination between
+stations, coherence represents how consistently those stations remain
+coordinated, and the local QRTL field represents the distributed influence
+created by the driven system. The molecular residues are the components being
+assembled. A peptide bond is accepted only when the relevant local conditions
+satisfy the model's requirements.
 
- The fortieth stage calculates the transition-state condition. The system identifies the region along the transition pathway where the effective energetic barrier reaches its relevant maximum or otherwise satisfies the model's transition-state definition. The transition state is therefore derived from the current energy landscape.
+This analogy also makes clear why a zero QRTL bond score should not be
+interpreted as a zero chemical bond energy. If the workshop's special machine
+is switched off, its output disappears, but the material on the workbench does
+not cease to exist. Likewise, when qrtlCurrent is zero, the modeled QRTL field
+goes to zero and the QRTL-derived bond score goes to zero. That is a statement
+about the QRTL contribution, not a measurement of the intrinsic chemical
+energy of the peptide bond.
 
- The forty-first stage calculates the tunneling conditions. The system evaluates the barrier width, barrier energy, available molecular energy, effective QRTL contribution, coupling, and other parameters required by the tunneling model. The calculation determines whether the transition has a classically inaccessible region that can be evaluated by the model's tunneling mechanism.
+The primary computational chain currently implemented can therefore be
+summarized as follows: controlled initial condition leads to QRTL drive; the
+drive establishes QRTL current; QRTL current produces a spatial QRTL field;
+the field contributes to local QRTL energy; chemical and QRTL contributions
+produce effective modeled energy; the cellular automaton evolves; molecular
+states and glycine residues are organized; residue orientation and distance
+are evaluated; the candidate transition is calculated; local QRTL current and
+field are evaluated at the transition; local energy density, coherence, and
+phase alignment produce the bond-formation score; the transition probability
+is calculated; the peptide-bond gates are applied; successful coupling
+produces chain growth; the resulting structure is subjected to modeled
+conformational analysis; and finally the QRTL-on condition can be compared
+with the QRTL-off control condition.
 
- The forty-second stage calculates tunneling probability. The tunneling calculation uses the actual barrier produced by the current peptide state. If the barrier changes because the peptide geometry, QRTL field, resonance, or coupling changes, the tunneling probability changes as well. The tunneling result is therefore connected to the preceding pipeline.
+The defining principle of the current implementation is therefore causal
+continuity within the computational model. A downstream quantity should be
+traceable to upstream quantities rather than appearing as an unrelated
+number. The QRTL field comes from the modeled current and field-response
+relationship. Local QRTL energy comes from the local field and local cell
+state. The bond-formation score comes from local energy density, local field,
+coherence, and phase alignment. Transition probability comes from the
+modeled transition-energy calculation. Bond acceptance comes from the defined
+gates. The resulting molecular state can then become the starting point for
+subsequent calculations.
 
- The forty-third stage calculates transition probability. Tunneling and non-tunneling contributions represented by the model are combined with the transition-state conditions to determine the probability of the modeled molecular transition.
+At the same time, causal continuity within a simulation should not be confused
+with physical validation. A mathematically connected program can consistently
+produce results even when some of its underlying equations or parameter values
+are hypotheses. The purpose of the current architecture is therefore to make
+the proposed mechanism explicit, reproducible, inspectable, and testable. The
+model exposes the intermediate variables instead of hiding the entire process
+behind a single final answer.
 
- The forty-fourth stage calculates the QRTL-generated transition rate. The transition probability is converted into the corresponding modeled transition rate using the defined temporal relationship. The rate must originate from the calculated QRTL and molecular state rather than from a separate hard-coded reaction rate.
+The current peptide-assembly engine is consequently best understood as a
+controlled computational experiment. The molecular sequence is specified,
+the lattice is initialized, the QRTL drive can be turned on or off, local
+states evolve, candidate peptide coupling is evaluated, and the resulting
+state can be inspected. The simulation can answer questions about how its own
+equations behave under controlled changes. It cannot, by itself, establish
+that QRTL exists physically, that the modeled field corresponds to a known
+physical field, or that the numerical bond-formation score is a measured
+chemical energy.
 
- The forty-fifth stage applies the transition to the molecular state. If the calculated transition satisfies the model's transition criterion, the molecular configuration is advanced toward the resulting state. The peptide geometry, energy shell, twister field, phase field, resonance state, coupling, and energy landscape must then be recalculated because the molecular state has changed.
+The next level of development would therefore be dimensional calibration and
+independent validation. The model quantities would need explicit definitions
+of units, physical constants where appropriate, experimentally measurable
+observables, and equations connecting the computational variables to those
+observables. Once such a mapping exists, quantities such as the modeled
+QRTL contribution, transition probability, and response to the drive could be
+compared quantitatively with experimental data. Until then, the most
+appropriate interpretation is that the engine provides a connected
+computational representation of a proposed QRTL-assisted peptide-assembly
+mechanism.
 
- The forty-sixth stage begins the feedback cycle. The new molecular geometry changes density. The changed density changes the energy shell. The changed energy shell changes the local QRTL environment. The changed QRTL environment changes twister states, neighbor flow, phase, resonance, coupling, and effective energy. The new energy landscape changes the transition calculation. The pipeline therefore becomes a closed feedback system rather than a one-time calculation.
+In summary, the current model begins with four programmed glycine residues
+and a controlled lattice environment. It creates a 75-cell computational
+field, establishes local molecular and lattice states, applies a controllable
+QRTL drive, calculates QRTL current and a spatial QRTL field, derives modeled
+local QRTL energy, evolves neighboring cellular states, organizes molecular
+units, determines residue orientation, and evaluates a candidate peptide
+coupling. The coupling calculation depends on distance, orientation, local
+energy density, local field, coherence, phase alignment, QRTL current, and
+other defined model conditions. The bond-formation metric is explicitly a
+model score rather than a calibrated chemical energy. A zero value under the
+QRTL-off condition means that the modeled QRTL contribution is absent; it does
+not mean that the chemical bond itself has zero physical energy. The model
+then applies transition gates, updates successful bonds, grows the programmed
+peptide, applies a modeled conformational state, and compares the driven
+condition with the control condition.
 
- The forty-seventh stage performs iterative relaxation. The complete pipeline is repeatedly evaluated until the molecular and QRTL states approach a stable solution. Every iteration uses the previous iteration's complete state and produces a new complete state. This prevents disconnected calculations from appearing to converge when the underlying fields remain inconsistent.
-
- The forty-eighth stage evaluates convergence. The system compares the current state with the previous state. Molecular displacement, energy change, phase change, coupling change, resonance change, and other relevant quantities are evaluated against defined convergence criteria. The calculation stops only when the required conditions have converged or when the maximum permitted number of iterations has been reached.
-
- The forty-ninth stage evaluates stability. The final candidate state is tested for molecular stability, energy stability, phase coherence, phase closure, resonance consistency, coupling consistency, and neighbor-flow conservation. A state that satisfies only one of these conditions is not automatically classified as stable.
-
- The fiftieth stage evaluates conservation. The complete lattice is checked for unexplained energy creation or destruction and for unexplained twist-current imbalance. Any permitted source, sink, reaction, or boundary transfer is explicitly accounted for. The purpose is to ensure that the final state is internally consistent with the conservation rules of the model.
-
- The fifty-first stage evaluates numerical validity. Every calculated quantity is checked for undefined values, infinite values, invalid square roots, invalid logarithms, division by zero, uncontrolled exponential growth, and other numerical failures. Invalid intermediate values are rejected or handled according to explicit numerical rules rather than being allowed to propagate into the final result.
-
- The fifty-second stage performs residue-level analysis. The final QRTL state is mapped back onto individual residues. Each residue can be evaluated according to its local energy, phase coherence, resonance occupancy, coupling, energy-flow balance, and contribution to the transition pathway. This identifies which parts of the peptide participate most strongly in the modeled process.
-
- The fifty-third stage performs pathway analysis. The system identifies the connected molecular and QRTL regions that contribute to the transition. The pathway includes structural connectivity, energy-flow connectivity, phase connectivity, resonance connectivity, and coupling connectivity. This provides a complete description of how the modeled influence travels through the peptide.
-
- The fifty-fourth stage generates the final three dimensional field representation. The molecular structure is displayed together with the energy shell, QRTL field, twister orientations, phase state, resonance shells, coupling regions, energy barriers, and transition pathway. The visualization uses the calculated state rather than generating independent visual values.
-
- The fifty-fifth stage generates the final molecular measurements. The system reports the final molecular energy, QRTL energy contribution, effective energy, phase coherence, phase error, closure state, resonance occupancy, coupling, energy-flow balance, barrier characteristics, tunneling probability, transition probability, and QRTL-generated transition rate. Each reported value must be traceable to the same canonical pipeline.
-
- The fifty-sixth stage performs final cross-checking. The reported values are compared against the internal state to ensure that the visualization, numerical calculations, and final summaries all describe the same molecular configuration. The system verifies that a displayed resonance state corresponds to the calculated resonance state, that a displayed energy corresponds to the calculated energy, and that a displayed transition corresponds to the calculated transition pathway.
-
- The fifty-seventh stage establishes the final peptide state. The final state consists of the molecular geometry together with its energy shell, density field, quark-twister field, neighbor-flow field, phase field, phase error, phase coherence, phase closure, discrete resonance shells, resonance occupancy, coupling field, QRTL field, QRTL energy, effective molecular energy, energy barriers, transition pathway, tunneling probability, transition probability, and QRTL-generated transition rate.
-
- The complete pipeline therefore operates as one connected chain. The peptide structure creates the molecular geometry. The molecular geometry creates the density distribution. The density distribution creates the energy shell. The energy shell establishes the QRTL environment. The QRTL environment establishes the quark-twister states. The twister states create neighbor flow. Neighbor flow establishes local conservation and energy transport. Neighbor relationships establish phase differences. Phase differences establish phase error. Phase error produces phase correction. Phase correction produces synchronization. Synchronization produces coherence. Coherence permits phase closure. Phase closure establishes discrete resonance compatibility. Resonance compatibility produces resonance occupancy. Resonance occupancy produces coupling. Coupling generates the QRTL field. The QRTL field modifies the effective molecular energy landscape. The effective landscape establishes barriers and transition pathways. The transition pathway establishes tunneling conditions. Tunneling produces transition probability. Transition probability produces the QRTL-generated transition rate. The resulting transition changes the molecular state, which feeds back into the density, energy shell, twister, phase, resonance, coupling, and energy calculations.
-
- The defining rule of the entire pipeline is therefore continuity. No major result should be calculated independently from the state that supposedly produces it. The energy must come from the energy field. The energy field must come from the molecular and QRTL state. The QRTL state must come from the twister, flow, phase, resonance, and coupling calculations. The tunneling probability must come from the resulting barrier. The transition probability must come from the tunneling and transition-state calculation. The reaction or transition rate must come from that calculated probability. The visualization must display those same values. When the peptide changes, the entire connected chain must be capable of responding to that change.
-
- This architecture turns the peptide model into a complete computational pipeline rather than a collection of separate demonstrations. The molecular structure is the input, the evolving QRTL field is the intermediate physical state represented by the model, and the final molecular energy, resonance, stability, tunneling, and transition results are outputs of the same connected calculation. Every intermediate state can therefore be inspected, validated, and traced back to the preceding stage.
-
- */
-
+The result is a computational pipeline in which the QRTL drive influences the
+local molecular transition rather than directly declaring that a bond exists.
+The cellular automaton supplies the local computational environment, the QRTL
+drive supplies a controlled excitation, the field and phase relationships
+supply local transition conditions, and the bond-formation logic determines
+whether the simulated coupling is accepted. The architecture is therefore
+useful as a framework for investigating the proposed mechanism, provided that
+its numerical outputs are interpreted according to what the code actually
+calculates and are not treated as experimentally established physical
+quantities until the necessary dimensional calibration and validation have
+been performed.
+*/
 
 
 import SwiftUI
